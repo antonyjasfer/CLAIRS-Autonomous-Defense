@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CLAIRS – Autonomous Defense Environment</title>
+  <meta name="description" content="CLAIRS: Real-time RL-powered autonomous IoT defense dashboard with live telemetry, chaos engine, and AI agent audit trail." />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* ── Base ── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: #0f172a;
+      font-family: 'Inter', sans-serif;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated grid background ── */
+    .bg-grid {
+      background-image:
+        linear-gradient(rgba(99,102,241,.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* ── Glassmorphism card ── */
+    .glass {
+      background: rgba(30,41,59,.72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,.08);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .glass:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.45);
+    }
+
+    /* ── Border pulse keyframes ── */
+    @keyframes pulse-emerald {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,.55), inset 0 0 0 1px #10b981; }
+      50%       { box-shadow: 0 0 24px 6px rgba(52,211,153,.18), inset 0 0 0 1px #10b981; }
+    }
+    @keyframes pulse-yellow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(250,204,21,.55), inset 0 0 0 1px #eab308; }
+      50%       { box-shadow: 0 0 24px 6px rgba(250,204,21,.18), inset 0 0 0 1px #eab308; }
+    }
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.7),  inset 0 0 0 1px #ef4444; }
+      50%       { box-shadow: 0 0 28px 8px rgba(239,68,68,.25), inset 0 0 0 1px #ef4444; }
+    }
+    @keyframes radar-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    @keyframes float-up {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes blink-cursor {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+    @keyframes scanline {
+      0%   { top: -10%; }
+      100% { top: 110%; }
+    }
+    @keyframes hue-shift {
+      0%   { filter: hue-rotate(0deg); }
+      100% { filter: hue-rotate(360deg); }
+    }
+
+    .action-safe    { animation: pulse-emerald 2s ease-in-out infinite; border-color: #10b981 !important; }
+    .action-warning { animation: pulse-yellow  1.4s ease-in-out infinite; border-color: #eab308 !important; }
+    .action-threat  { animation: pulse-red     1s ease-in-out infinite; border-color: #ef4444 !important; }
+
+    /* ── Scanline overlay on chart ── */
+    .chart-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+    .chart-wrap::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, rgba(99,102,241,.4), transparent);
+      animation: scanline 3s linear infinite;
+      pointer-events: none;
+    }
+
+    /* ── Terminal ── */
+    .terminal {
+      background: rgba(2,6,23,.85);
+      border: 1px solid rgba(99,102,241,.25);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .75rem;
+      line-height: 1.6;
+    }
+    .log-entry { animation: float-up .25s ease forwards; }
+    .cursor-blink::after {
+      content: '█';
+      animation: blink-cursor 1s step-end infinite;
+      color: #818cf8;
+      margin-left: 2px;
+    }
+
+    /* ── Connection lost overlay ── */
+    #connection-lost {
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .radar-icon { animation: radar-spin 2s linear infinite; }
+
+    /* ── Difficulty badge ── */
+    .diff-easy   { background: rgba(52,211,153,.15); color: #34d399; border-color: #10b981; }
+    .diff-medium { background: rgba(250,204,21,.15); color: #fcd34d; border-color: #eab308; }
+    .diff-hard   { background: rgba(239,68,68,.15);  color: #f87171; border-color: #ef4444; }
+
+    /* ── Gradient text ── */
+    .gradient-title {
+      background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Stat value animation ── */
+    .stat-val { transition: color .4s ease; }
+
+    /* ── Button ── */
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #06b6d4);
+      transition: all .2s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      opacity: 0;
+      transition: opacity .3s ease;
+    }
+    .btn-primary:hover::before { opacity: 1; }
+    .btn-primary > * { position: relative; z-index: 1; }
+    .btn-suspend {
+      background: linear-gradient(135deg, #7c3aed, #db2777);
+    }
+    .btn-suspend::before {
+      background: linear-gradient(135deg, #db2777, #7c3aed);
+    }
+
+    /* ── Mini sparkline inside card ── */
+    .spark-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: currentColor;
+      transition: height .4s ease;
+    }
+
+    /* ── Top accent line ── */
+    .card-accent {
+      height: 3px;
+      border-radius: 3px 3px 0 0;
+    }
+
+    /* ── Status dot ── */
+    @keyframes dot-ping {
+      75%, 100% { transform: scale(2); opacity: 0; }
+    }
+    .dot-ping { animation: dot-ping 1.2s cubic-bezier(0,0,.2,1) infinite; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,.4); border-radius: 3px; }
+  </style>
+</head>
+
+<body class="bg-grid min-h-screen text-slate-100 antialiased">
+
+  <div id="connection-lost"
+       class="fixed inset-0 z-50 bg-slate-900/85 flex-col items-center justify-center hidden"
+       style="display:none;">
+    <div class="flex flex-col items-center gap-6 px-8 text-center">
+      <div class="relative">
+        <i class="ph-fill ph-radar radar-icon text-red-500" style="font-size:5rem;"></i>
+        <span class="absolute inset-0 rounded-full bg-red-500/20 animate-ping"></span>
+      </div>
+      <h2 class="text-3xl font-black tracking-wider text-red-400 uppercase">
+        📡 Connection Lost to AI Core
+      </h2>
+      <p class="text-slate-400 max-w-sm text-sm">
+        Unable to reach <code class="text-red-300 font-mono">http://127.0.0.1:8000/scan</code>.<br/>
+        Ensure the backend server is running.
+      </p>
+      <div class="flex items-center gap-2 text-slate-500 text-xs font-mono">
+        <span class="animate-spin inline-block">◌</span>
+        Attempting reconnect…
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+
+      <div class="flex items-start gap-4">
+        <div class="p-3 glass rounded-2xl border border-blue-500/30 shadow-lg shadow-blue-500/10 flex-shrink-0">
+          <i class="ph-fill ph-shield-checkered text-blue-400" style="font-size:2rem;"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-3">
+            <h1 class="text-3xl sm:text-4xl font-black gradient-title tracking-tight">
+              🛡️ CLAIRS Environment
+            </h1>
+            <span class="relative inline-flex h-3 w-3 ml-1">
+              <span class="dot-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+          </div>
+          <p class="text-slate-400 text-sm mt-1 font-medium tracking-wide">
+            Interactive RL Agent &amp; Chaos Simulation Engine
+          </p>
+          <div class="flex items-center gap-2 mt-2 text-xs text-slate-500 font-mono">
+            <i class="ph-bold ph-clock"></i>
+            <span id="sys-time">--:--:--</span>
+            <span class="text-slate-600">|</span>
+            <i class="ph-bold ph-cpu"></i>
+            <span>v2.4.1-alpha</span>
+            <span class="text-slate-600">|</span>
+            <span id="fetch-counter" class="text-indigo-400">0 cycles</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <div id="diff-badge"
+             class="diff-easy flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-full border uppercase tracking-widest hidden">
+          <i class="ph-bold ph-lightning" id="diff-icon"></i>
+          <span id="diff-label">STANDBY</span>
+          <span id="diff-desc" class="font-normal normal-case tracking-normal opacity-80 ml-1">Waiting...</span>
+        </div>
+
+        <button id="agent-toggle"
+                onclick="toggleAgent()"
+                class="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm text-white shadow-lg shadow-blue-500/25">
+          <i class="ph-bold ph-play" id="toggle-icon"></i>
+          <span id="toggle-label">Initialize Agent</span>
+        </button>
+
+        <button class="glass rounded-xl p-2.5 border border-slate-700/60 hover:border-indigo-500/60 transition-colors">
+          <i class="ph-bold ph-sliders-horizontal text-slate-400" style="font-size:1.1rem;"></i>
+        </button>
+      </div>
+    </header>
+
+    <section class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+
+      <div class="glass rounded-2xl overflow-hidden" id="card-cpu">
+        <div class="card-accent bg-gradient-to-r from-indigo-500 to-blue-500"></div>
+        <div class="p-5">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">CPU Load</p>
+              <p class="stat-val text-3xl font-black text-white mt-1" id="cpu-val">—</p>
+            </div>
+            <div class="p-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30">
+              <i class="ph-bold ph-cpu text-indigo-400" style="font-size:1.4rem;"></i>
+            </div>
+          </div>
+          <div class="flex items-end gap-0.5 h-8 mt-2" id="cpu-spark">
+            <span class="spark-bar" style="height:40%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:55%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:30%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:70%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:50%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:90%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:65%;color:#818cf8"></span>
+            <span class="spark-bar" style="height:45%;color:#818cf8"></span>
+          </div>
+          <div class="flex items-center justify-between mt-3">
+            <span class="text-xs text-slate-500 font-mono">sys/kernel</span>
+            <span class="text-xs font-semibold" id="cpu-status-text">Standby</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-2xl overflow-hidden" id="card-net">
+        <div class="card-accent bg-gradient-to-r from-cyan-500 to-teal-500"></div>
+        <div class="p-5">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Network Traffic</p>
+              <p class="stat-val text-3xl font-black text-white mt-1" id="pps-val">—</p>
+            </div>
+            <div class="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30">
+              <i class="ph-bold ph-activity text-cyan-400" style="font-size:1.4rem;"></i>
+            </div>
+          </div>
+          <div class="flex items-end gap-0.5 h-8 mt-2" id="pps-spark">
+            <span class="spark-bar" style="height:30%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:55%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:75%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:40%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:60%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:85%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:50%;color:#22d3ee"></span>
+            <span class="spark-bar" style="height:95%;color:#22d3ee"></span>
+          </div>
+          <div class="flex items-center justify-between mt-3">
+            <span class="text-xs text-slate-500 font-mono">packets/sec</span>
+            <span class="text-xs font-semibold text-cyan-400" id="pps-status-text">Standby</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-2xl overflow-hidden border-2 border-transparent" id="card-action">
+        <div class="card-accent bg-gradient-to-r from-slate-500 to-slate-400" id="action-accent"></div>
+        <div class="p-5">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">Agent Action</p>
+              <p class="font-black text-lg leading-tight mt-1" id="action-label" style="color:#94a3b8;">STANDBY</p>
+              <p class="text-xs font-semibold mt-0.5" id="action-sub" style="color:#64748b;">AWAITING INIT</p>
+            </div>
+            <div class="p-2.5 rounded-xl" id="action-icon-wrap" style="background:rgba(148,163,184,.15);border:1px solid rgba(148,163,184,.3)">
+              <i class="ph-bold ph-robot text-slate-400" id="action-icon" style="font-size:1.4rem;"></i>
+            </div>
+          </div>
+          <div class="mt-3 rounded-lg px-3 py-2 font-mono text-xs" id="action-state-box"
+               style="background:rgba(148,163,184,.08);color:#94a3b8;">
+            <i class="ph-bold ph-pause-circle mr-1"></i>
+            Environment: <strong>Offline</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-2xl overflow-hidden" id="card-reward">
+        <div class="card-accent bg-gradient-to-r from-violet-500 to-purple-600"></div>
+        <div class="p-5">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <p class="text-xs font-semibold text-slate-400 uppercase tracking-widest">RL Reward Score</p>
+              <div class="flex items-center gap-2 mt-1">
+                <p class="stat-val text-3xl font-black" id="reward-val" style="color:#a78bfa;">+0.00</p>
+                <i class="ph-bold" id="reward-trend" style="font-size:1.4rem;color:#a78bfa;"></i>
+              </div>
+            </div>
+            <div class="p-2.5 rounded-xl bg-violet-500/15 border border-violet-500/30">
+              <i class="ph-bold ph-brain text-violet-400" style="font-size:1.4rem;"></i>
+            </div>
+          </div>
+          <p class="text-xs font-mono" id="reward-desc" style="color:#c4b5fd;">Awaiting agent…</p>
+          <div class="mt-3 flex gap-1">
+            <div class="h-1.5 flex-1 rounded-full bg-slate-700 overflow-hidden">
+              <div class="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all duration-700"
+                   id="reward-bar" style="width:50%"></div>
+            </div>
+          </div>
+          <p class="text-xs text-slate-600 font-mono mt-1">
+            Cumulative: <span id="reward-cumulative" class="text-violet-400 font-semibold">0.00</span>
+          </p>
+        </div>
+      </div>
+
+    </section>
+
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+      <div class="xl:col-span-2 glass rounded-2xl overflow-hidden">
+        <div class="card-accent bg-gradient-to-r from-blue-600 via-indigo-500 to-violet-600" id="chart-accent"></div>
+        <div class="p-5">
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <h2 class="font-bold text-white text-base">Live Environment Telemetry</h2>
+              <p class="text-xs text-slate-500 mt-0.5 font-mono">CPU utilisation · real-time stream · 1.5s cadence</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-500 font-mono">Last 20 pts</span>
+              <div class="p-1.5 glass rounded-lg border border-slate-700/50">
+                <i class="ph-bold ph-chart-line text-indigo-400" style="font-size:1rem;"></i>
+              </div>
+            </div>
+          </div>
+          <div class="chart-wrap" style="height:220px;">
+            <canvas id="telemetry-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-2xl overflow-hidden flex flex-col">
+        <div class="card-accent bg-gradient-to-r from-red-600 to-orange-500"></div>
+        <div class="p-5 flex flex-col h-full">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold text-white text-base">Threat Intelligence</h2>
+            <i class="ph-fill ph-warning-diamond text-red-400" style="font-size:1.1rem;"></i>
+          </div>
+
+          <div class="mb-4 rounded-xl p-3 border border-red-500/20 bg-red-500/5">
+            <p class="text-xs text-slate-400 mb-2 font-mono uppercase tracking-widest">Chaos Engine</p>
+            <div class="flex items-center gap-3">
+              <div class="relative flex h-3 w-3">
+                <span class="dot-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </div>
+              <span class="font-bold text-red-400 uppercase tracking-wide text-sm" id="chaos-label">Active</span>
+            </div>
+          </div>
+
+          <div class="space-y-3 flex-1">
+            <div class="flex justify-between items-center py-2 border-b border-slate-700/40">
+              <span class="text-xs text-slate-400 flex items-center gap-1.5">
+                <i class="ph-fill ph-shield-slash text-red-400"></i> Attacks Detected
+              </span>
+              <span class="font-bold text-red-400 font-mono" id="stat-attacks">0</span>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-700/40">
+              <span class="text-xs text-slate-400 flex items-center gap-1.5">
+                <i class="ph-fill ph-check-circle text-emerald-400"></i> Attacks Blocked
+              </span>
+              <span class="font-bold text-emerald-400 font-mono" id="stat-blocked">0</span>
+            </div>
+            <div class="flex justify-between items-center py-2 border-b border-slate-700/40">
+              <span class="text-xs text-slate-400 flex items-center gap-1.5">
+                <i class="ph-bold ph-timer text-yellow-400"></i> Rate Limited
+              </span>
+              <span class="font-bold text-yellow-400 font-mono" id="stat-ratelimit">0</span>
+            </div>
+            <div class="flex justify-between items-center py-2">
+              <span class="text-xs text-slate-400 flex items-center gap-1.5">
+                <i class="ph-bold ph-percent text-violet-400"></i> Block Rate
+              </span>
+              <span class="font-bold text-violet-400 font-mono" id="stat-blockrate">0%</span>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <div class="flex justify-between text-xs text-slate-500 mb-1">
+              <span>Network Health</span>
+              <span id="health-pct">100%</span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-700 overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-700"
+                   id="health-bar"
+                   style="width:100%; background: linear-gradient(90deg, #10b981, #34d399);"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="glass rounded-2xl overflow-hidden">
+      <div class="card-accent bg-gradient-to-r from-slate-600 to-slate-500"></div>
+      <div class="p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="flex gap-1.5">
+              <span class="w-3 h-3 rounded-full bg-red-500"></span>
+              <span class="w-3 h-3 rounded-full bg-yellow-400"></span>
+              <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+            </div>
+            <h2 class="font-bold text-white text-base">
+              Agent Audit Trail
+            </h2>
+            <span class="text-xs font-mono text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/25">
+              LIVE
+            </span>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="clearLog()"
+                    class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-700/60 hover:border-slate-500 transition-all glass">
+              <i class="ph-bold ph-trash"></i> Clear
+            </button>
+            <button onclick="downloadLog()"
+                    class="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 px-3 py-1.5 rounded-lg border border-emerald-700/50 hover:border-emerald-500 transition-all glass">
+              <i class="ph-bold ph-download-simple"></i> Export
+            </button>
+          </div>
+        </div>
+
+        <div class="terminal rounded-xl p-4 h-48 overflow-y-auto" id="audit-log">
+          <p class="text-indigo-400 font-mono text-xs cursor-blink">
+            CLAIRS v2.4.1 initialised · awaiting agent…
+          </p>
+        </div>
+        <p class="text-xs text-slate-600 font-mono mt-2 flex items-center gap-1">
+          <i class="ph-fill ph-info"></i>
+          Capped at 50 entries · prepended in real-time · fetching from
+          <span class="text-indigo-400">http://127.0.0.1:8000/scan</span>
+        </p>
+      </div>
+    </div>
+
+  </div><script>
+  'use strict';
+
+  /* ── Constants ── */
+  const FETCH_URL   = 'http://127.0.0.1:8000/scan';
+  const INTERVAL_MS = 1500;
+  const MAX_CHART_PTS = 20;
+  const MAX_LOG_ENTRIES = 50;
+
+  /* ── State ── */
+  let agentRunning = false;
+  let fetchInterval = null;
+  let fetchCount = 0;
+  let cumulativeReward = 0;
+  let connLost = false;
+
+  /* Counters */
+  let attacks = 0, blocked = 0, rateLimited = 0;
+
+  /* ── Clock ── */
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('sys-time').textContent =
+      now.toLocaleTimeString('en-GB', { hour12: false });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  /* ── Chart init ── */
+  const chartCtx = document.getElementById('telemetry-chart').getContext('2d');
+  const chartLabels = [];
+  const chartData   = [];
+
+  const telChart = new Chart(chartCtx, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'CPU %',
+        data: chartData,
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16,185,129,.08)',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        tension: 0.45,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: 'easeInOutCubic' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15,23,42,.9)',
+          borderColor: 'rgba(99,102,241,.4)',
+          borderWidth: 1,
+          callbacks: {
+            label: ctx => ` CPU: ${ctx.parsed.y.toFixed(2)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { color: '#475569', font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 6 },
+          border: { color: 'rgba(71,85,105,.3)' }
+        },
+        y: {
+          min: 0, max: 100,
+          grid: { display: false },
+          ticks: {
+            color: '#475569',
+            font: { family: 'JetBrains Mono', size: 10 },
+            callback: v => v + '%'
+          },
+          border: { color: 'rgba(71,85,105,.3)' }
+        }
+      }
+    }
+  });
+
+  /* ── Strip emojis ── */
+  function stripEmoji(str) {
+    return (str || '').replace(/(\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu, '').trim();
+  }
+
+  /* ── Derive state from diagnosis ── */
+  function getState(diagnosis) {
+    const d = (diagnosis || '').toLowerCase();
+    if (d.includes('block') || d.includes('threat') || d.includes('ddos') || d.includes('attack'))
+      return 'threat';
+    if (d.includes('rate') || d.includes('warning') || d.includes('limit') || d.includes('slow'))
+      return 'warning';
+    return 'safe';
+  }
+
+  /* ── Phosphor icon by state ── */
+  const STATE_CFG = {
+    safe: {
+      color: '#34d399', border: '#10b981', bg: 'rgba(52,211,153,.12)',
+      icon: 'ph-shield-check', accentFrom: 'from-emerald-500', accentTo: 'to-green-500',
+      label: 'SAFE', sub: 'ACTION: MONITORING',
+      stateBox: { bg:'rgba(52,211,153,.08)', color:'#34d399', icon:'ph-check-circle', text:'Nominal' },
+      chartColor: '#10b981', chartFill: 'rgba(16,185,129,.08)',
+      pulseClass: 'action-safe',
+    },
+    warning: {
+      color: '#fbbf24', border: '#eab308', bg: 'rgba(250,191,36,.12)',
+      icon: 'ph-shield-warning', accentFrom: 'from-yellow-500', accentTo: 'to-amber-500',
+      label: 'WARNING', sub: 'ACTION: RATE LIMITING',
+      stateBox: { bg:'rgba(251,191,36,.08)', color:'#fbbf24', icon:'ph-clock-countdown', text:'Rate-Limited' },
+      chartColor: '#eab308', chartFill: 'rgba(234,179,8,.08)',
+      pulseClass: 'action-warning',
+    },
+    threat: {
+      color: '#f87171', border: '#ef4444', bg: 'rgba(248,113,113,.12)',
+      icon: 'ph-shield-slash', accentFrom: 'from-red-600', accentTo: 'to-rose-500',
+      label: '🚨 THREAT', sub: 'ACTION: IP BLOCKED',
+      stateBox: { bg:'rgba(248,113,113,.08)', color:'#f87171', icon:'ph-prohibit', text:'UNDER ATTACK' },
+      chartColor: '#ef4444', chartFill: 'rgba(239,68,68,.1)',
+      pulseClass: 'action-threat',
+    },
+  };
+
+  /* ── Update card-action ── */
+  function updateActionCard(state, cpuPct) {
+    const cfg       = STATE_CFG[state];
+    const cardEl    = document.getElementById('card-action');
+    const accentEl  = document.getElementById('action-accent');
+    const iconWrap  = document.getElementById('action-icon-wrap');
+    const iconEl    = document.getElementById('action-icon');
+    const labelEl   = document.getElementById('action-label');
+    const subEl     = document.getElementById('action-sub');
+    const stateBoxEl= document.getElementById('action-state-box');
+
+    // Swap border-pulse class
+    cardEl.classList.remove('action-safe','action-warning','action-threat', 'border-transparent');
+    cardEl.classList.add(cfg.pulseClass);
+
+    // Accent bar
+    accentEl.className = `card-accent bg-gradient-to-r ${cfg.accentFrom} ${cfg.accentTo}`;
+
+    // Icon wrap
+    iconWrap.style.background = cfg.bg;
+    iconWrap.style.border = `1px solid ${cfg.border}`;
+    iconEl.className = `ph-fill ${cfg.icon}`;
+    iconEl.style.color = cfg.color;
+
+    // Text
+    labelEl.textContent = cfg.label;
+    labelEl.style.color = cfg.color;
+    subEl.textContent   = cfg.sub;
+    subEl.style.color   = cfg.color + 'aa';
+
+    // State box
+    stateBoxEl.style.background = cfg.stateBox.bg;
+    stateBoxEl.style.color      = cfg.stateBox.color;
+    stateBoxEl.innerHTML = `<i class="ph-bold ${cfg.stateBox.icon} mr-1"></i>Environment: <strong>${cfg.stateBox.text}</strong>`;
+  }
+
+  /* ── Update Chart colors ── */
+  function updateChartColor(state) {
+    const cfg = STATE_CFG[state];
+    telChart.data.datasets[0].borderColor = cfg.chartColor;
+    telChart.data.datasets[0].backgroundColor = cfg.chartFill;
+    document.getElementById('chart-accent').className =
+      `card-accent bg-gradient-to-r ${STATE_CFG[state].accentFrom} ${STATE_CFG[state].accentTo}`;
+  }
+
+  /* ── Difficulty badge ── */
+  function updateDiff(mode) {
+    const badge   = document.getElementById('diff-badge');
+    const label   = document.getElementById('diff-label');
+    const desc    = document.getElementById('diff-desc');
+    const icon    = document.getElementById('diff-icon');
+    const m       = (mode || '').toUpperCase();
+    
+    badge.className = "flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-full border uppercase tracking-widest";
+
+    if (m.includes('HARD')) {
+      badge.classList.add('diff-hard');
+      label.textContent = 'HARD';
+      desc.textContent  = 'Stealth DDoS';
+      icon.className    = 'ph-fill ph-warning-octagon';
+    } else if (m.includes('MEDIUM')) {
+      badge.classList.add('diff-medium');
+      label.textContent = 'MEDIUM';
+      desc.textContent  = 'Adaptive Attack';
+      icon.className    = 'ph-fill ph-warning';
+    } else {
+      badge.classList.add('diff-easy');
+      label.textContent = 'EASY';
+      desc.textContent  = 'Standard Mode';
+      icon.className    = 'ph-fill ph-check-circle';
+    }
+  }
+
+  /* ── Reward (UPDATED PARSER) ── */
+  function updateReward(val) {
+    // Extract the number (e.g., "+0.4")
+    const numStr = String(val).match(/-?\d+\.?\d*/);
+    const numVal = numStr ? parseFloat(numStr[0]) : 0;
+    
+    // Extract the exact text from the backend (e.g., "Optimal: Allowed user")
+    const textMatch = String(val).match(/\((.*?)\)/);
+    const exactDesc = textMatch ? textMatch[1] : 'Action evaluated';
+    
+    cumulativeReward += numVal;
+
+    const el    = document.getElementById('reward-val');
+    const trend = document.getElementById('reward-trend');
+    const desc  = document.getElementById('reward-desc');
+    const bar   = document.getElementById('reward-bar');
+    const cumEl = document.getElementById('reward-cumulative');
+
+    const sign = numVal > 0 ? '+' : '';
+    el.textContent = `${sign}${numVal.toFixed(2)}`;
+
+    // Set the exact description from your Python backend!
+    desc.textContent = exactDesc;
+
+    if (numVal > 0) {
+      el.style.color    = '#34d399';
+      trend.className   = 'ph-bold ph-trend-up';
+      trend.style.color = '#34d399';
+      desc.style.color  = '#6ee7b7';
+    } else if (numVal === 0) {
+      el.style.color    = '#a78bfa';
+      trend.className   = 'ph-bold ph-minus';
+      trend.style.color = '#a78bfa';
+      desc.style.color  = '#c4b5fd';
+    } else {
+      el.style.color    = '#f87171';
+      trend.className   = 'ph-bold ph-trend-down';
+      trend.style.color = '#f87171';
+      desc.style.color  = '#fca5a5';
+    }
+
+    // 0..100 normalised bar (reward range ~-1..+1)
+    const pct = Math.min(100, Math.max(0, (numVal + 1) / 2 * 100));
+    bar.style.width = pct + '%';
+    bar.style.background = numVal >= 0
+      ? 'linear-gradient(90deg,#7c3aed,#34d399)'
+      : 'linear-gradient(90deg,#7f1d1d,#ef4444)';
+
+    cumEl.textContent = (cumulativeReward > 0 ? '+' : '') + cumulativeReward.toFixed(2);
+  }
+
+  /* ── Sparkline push ── */
+  function pushSparkBar(containerId, val, color) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const bars = el.querySelectorAll('.spark-bar');
+    bars.forEach((b, i) => {
+      if (i < bars.length - 1) {
+        b.style.height = bars[i+1].style.height;
+      }
+    });
+    bars[bars.length - 1].style.height = Math.min(100, val) + '%';
+    bars[bars.length - 1].style.color  = color;
+  }
+
+  /* ── Health bar ── */
+  function updateHealth(state) {
+    const hBar  = document.getElementById('health-bar');
+    const hPct  = document.getElementById('health-pct');
+    if (state === 'threat') {
+      const pct = Math.max(12, 100 - attacks * 3);
+      hBar.style.width = pct + '%';
+      hBar.style.background = 'linear-gradient(90deg,#7f1d1d,#ef4444)';
+      hPct.textContent = pct + '%';
+    } else if (state === 'warning') {
+      hBar.style.width = '65%';
+      hBar.style.background = 'linear-gradient(90deg,#78350f,#eab308)';
+      hPct.textContent = '65%';
+    } else {
+      hBar.style.width = '100%';
+      hBar.style.background = 'linear-gradient(90deg,#10b981,#34d399)';
+      hPct.textContent = '100%';
+    }
+  }
+
+  /* ── Audit Log ── */
+  function patchIcon(state) {
+    if (state === 'threat')  return '<i class="ph-bold ph-x" style="color:#f87171;"></i>';
+    if (state === 'warning')  return '<i class="ph-bold ph-warning" style="color:#fbbf24;"></i>';
+    return '<i class="ph-bold ph-check" style="color:#34d399;"></i>';
+  }
+  function actionText(state) {
+    if (state === 'threat')  return '<span style="color:#f87171;" class="font-bold">THREAT BLOCKED</span>';
+    if (state === 'warning') return '<span style="color:#fbbf24;" class="font-bold">RATE LIMITED</span>';
+    return '<span style="color:#34d399;" class="font-bold">MONITORING</span>';
+  }
+
+  function appendLog(state, reward, diff, diagRaw) {
+    // Only log occasionally for safe states to avoid spam
+    if (state === 'safe' && Math.random() > 0.2) return;
+
+    const log = document.getElementById('audit-log');
+    
+    if (log.innerText.includes("awaiting agent")) {
+        log.innerHTML = "";
+    }
+
+    const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    
+    const numStr = String(reward).match(/-?\d+\.?\d*/);
+    const numVal = numStr ? parseFloat(numStr[0]) : 0;
+    const sign = numVal > 0 ? '+' : '';
+    const rewardStr = `${sign}${numVal.toFixed(2)}`;
+    
+    const diffClean = stripEmoji(diff).toUpperCase() || 'EASY';
+
+    const entry = document.createElement('div');
+    entry.className = 'log-entry flex items-start gap-2 py-0.5';
+    entry.innerHTML = `
+      <span style="color:#475569;min-width:70px;">[${now}]</span>
+      ${patchIcon(state)}
+      ${actionText(state)}
+      <span style="color:#94a3b8;">|</span>
+      <span style="color:#818cf8;">Score: ${rewardStr}</span>
+      <span style="color:#94a3b8;">—</span>
+      <span style="color:#64748b;">${diffClean}</span>
+    `;
+
+    log.insertBefore(entry, log.firstChild);
+
+    while (log.children.length > MAX_LOG_ENTRIES) {
+      log.removeChild(log.lastChild);
+    }
+  }
+
+  function clearLog() {
+    document.getElementById('audit-log').innerHTML =
+      '<p class="text-indigo-400 font-mono text-xs cursor-blink">Log cleared · CLAIRS running…</p>';
+  }
+
+  function downloadLog() {
+    const entries = document.querySelectorAll('#audit-log .log-entry');
+    let text = 'CLAIRS Agent Audit Trail\n========================\n\n';
+    entries.forEach(e => { text += e.innerText + '\n'; });
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'clairs_audit.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /* ── Connection overlay ── */
+  function showConnLost(show) {
+    const el = document.getElementById('connection-lost');
+    if (show) {
+      el.style.display = 'flex';
+      connLost = true;
+    } else {
+      el.style.display = 'none';
+      connLost = false;
+    }
+  }
+
+  /* ── Main data update ── */
+  function applyData(data) {
+    showConnLost(false);
+    fetchCount++;
+    document.getElementById('fetch-counter').textContent = `${fetchCount} cycles`;
+
+    const cpu    = data?.live_metrics?.cpu_usage_percent ?? 0;
+    const pps    = data?.live_metrics?.packet_rate_pps   ?? 0;
+    const diff   = data?.difficulty_mode                 ?? 'EASY';
+    const diagRaw= data?.clairs_ai_diagnosis             ?? 'Monitoring';
+    const reward = data?.agent_reward                    ?? 0;
+
+    const state  = getState(diagRaw);
+    const cfg    = STATE_CFG[state];
+
+    /* CPU card */
+    const cpuEl = document.getElementById('cpu-val');
+    cpuEl.textContent = cpu.toFixed(2) + '%';
+    cpuEl.style.color = cfg.color;
+    document.getElementById('cpu-status-text').textContent =
+      state === 'threat' ? 'Critical' : state === 'warning' ? 'Elevated' : 'Normal';
+    document.getElementById('cpu-status-text').style.color = cfg.color;
+    pushSparkBar('cpu-spark', cpu, '#818cf8');
+
+    /* PPS card */
+    const ppsEl = document.getElementById('pps-val');
+    ppsEl.textContent = pps.toLocaleString() + ' pps';
+    pushSparkBar('pps-spark', Math.min(100, pps / 10000 * 100), '#22d3ee');
+
+    /* Action card */
+    updateActionCard(state, cpu);
+
+    /* Reward */
+    updateReward(reward);
+
+    /* Difficulty */
+    updateDiff(diff);
+    document.getElementById('diff-badge').classList.remove('hidden');
+
+    /* Chart */
+    const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    chartLabels.push(ts);
+    chartData.push(parseFloat(cpu.toFixed(2)));
+    if (chartLabels.length > MAX_CHART_PTS) {
+      chartLabels.shift();
+      chartData.shift();
+    }
+    updateChartColor(state);
+    telChart.update();
+
+    /* Counters */
+    if (state === 'threat')   { attacks++;    blocked++;     document.getElementById('stat-attacks').textContent  = attacks;    document.getElementById('stat-blocked').textContent = blocked; }
+    if (state === 'warning')  { attacks++;    rateLimited++; document.getElementById('stat-attacks').textContent  = attacks;    document.getElementById('stat-ratelimit').textContent = rateLimited; }
+
+    const rate = attacks > 0 ? Math.round((blocked / attacks) * 100) : 0;
+    document.getElementById('stat-blockrate').textContent = rate + '%';
+
+    /* Health */
+    updateHealth(state);
+
+    /* Log */
+    appendLog(state, reward, diff, diagRaw);
+  }
+
+  /* ── Toggle agent ── */
+  function toggleAgent() {
+    agentRunning = !agentRunning;
+    const btn   = document.getElementById('agent-toggle');
+    const icon  = document.getElementById('toggle-icon');
+    const label = document.getElementById('toggle-label');
+    const badge = document.getElementById('diff-badge');
+
+    if (agentRunning) {
+      btn.classList.remove('btn-suspend');
+      btn.classList.add('btn-primary');
+      icon.className  = 'ph-bold ph-stop';
+      label.textContent = 'Suspend Agent';
+      badge.classList.remove('hidden');
+      fetchData();
+      fetchInterval = setInterval(fetchData, INTERVAL_MS);
+      
+      const log = document.getElementById('audit-log');
+      if (log.innerText.includes("awaiting agent")) {
+          log.innerHTML = "";
+      }
+      
+      const entry = document.createElement('div');
+      entry.className = 'log-entry flex items-start gap-2 py-0.5';
+      entry.innerHTML = `<span style="color:#475569;">[${new Date().toLocaleTimeString('en-GB', { hour12: false })}]</span> <span class="font-bold text-indigo-400">Agent initialized · autonomous mode engaged</span>`;
+      log.prepend(entry);
+    } else {
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-primary','btn-suspend');
+      icon.className  = 'ph-bold ph-play';
+      label.textContent = 'Initialize Agent';
+      badge.classList.add('hidden');
+      clearInterval(fetchInterval);
+      showConnLost(false);
+      
+      const log = document.getElementById('audit-log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry flex items-start gap-2 py-0.5';
+      entry.innerHTML = `<span style="color:#475569;">[${new Date().toLocaleTimeString('en-GB', { hour12: false })}]</span> <span class="font-bold text-slate-500">Agent suspended · manual mode</span>`;
+      log.prepend(entry);
+    }
+  }
+
+  /* ── Fetch Engine (Hardwired to Backend) ── */
+  async function fetchData() {
+    if (!agentRunning) return;
+    try {
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 1000);
+      const res  = await fetch(FETCH_URL, { cache:'no-store', signal: ctrl.signal });
+      clearTimeout(tid);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      applyData(data);
+    } catch {
+      // IF SERVER GOES OFFLINE -> TRIGGER THE CONNECTION LOST OVERLAY!
+      showConnLost(true);
+    }
+  }
+  </script>
+</body>
+</html>
