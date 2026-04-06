@@ -1,61 +1,43 @@
-# 🛡️ CLAIRS: Lightweight Autonomous Defense for IoT Networks
+# 🛡️ CLAIRS: Autonomous Defense Environment (OpenEnv)
 
-**An interactive, hybrid-AI defense environment designed to detect and mitigate DDoS attacks in real time for resource-constrained IoT systems.**
+**An interactive, hybrid-AI Reinforcement Learning environment designed to simulate real-time DDoS mitigation for resource-constrained IoT systems.**
 
 ## 📖 Problem Statement
-Low-power IoT devices—such as factory sensors, smart cameras, and embedded systems—are highly vulnerable to hijacking due to their limited computational capacity. These compromised devices are often used to form large botnets that launch Distributed Denial-of-Service (DDoS) attacks.
+Low-power IoT devices—such as factory sensors and smart cameras—are highly vulnerable to hijacking due to their limited computational capacity. These compromised devices are often used to form large botnets that launch Distributed Denial-of-Service (DDoS) attacks.
 
-Traditional security solutions are too resource-intensive to run on such devices. At the same time, many academic AI-based cybersecurity projects rely on static datasets and offline evaluation, which do not reflect real-world conditions.
+Traditional security solutions are too resource-intensive for these edge devices. Our goal was to design a lightweight, adaptive environment where an autonomous agent can learn to make real-time mitigation decisions without relying on static, offline datasets.
 
-Our goal was to design a system that is both lightweight and adaptive, while supporting real-time decision-making.
+## ⚙️ OpenEnv Integration & Architecture
+This project is fully compliant with the **OpenEnv** framework, providing a standardized evaluation pipeline for AI agents. 
 
-## 🧠 Our Approach: Hybrid AI Architecture
-CLAIRS is built as a closed-loop, interactive environment rather than a static detection model.
+We engineered a **Hybrid Architecture** to solve the latency constraints of live cybersecurity:
+1. **The Environment (Fast Reflex):** The core simulation continuously generates synthetic network telemetry (CPU usage, Packet Rate). It evaluates agent actions using strict, deterministic thresholds, simulating a sub-5-millisecond response layer.
+2. **The Agent (Deep Analysis):** The inference engine utilizes a Large Language Model (via an OpenAI-compatible API) to process the state and reason through the mitigation strategy. 
 
-A key design challenge was latency. While Large Language Models (LLMs) provide strong reasoning capabilities, they are not suitable for real-time mitigation due to response delays.
+### 🌪️ The Chaos Engine (Tasks)
+The environment dynamically simulates three distinct traffic scenarios:
+* **Task 1 (Easy):** Normal Traffic Handling. The agent must monitor without triggering false positives.
+* **Task 2 (Medium):** Volumetric DDoS. The agent must detect and block a massive packet flood.
+* **Task 3 (Hard):** Stealth DDoS. The agent must detect a highly targeted attack that bypasses standard CPU thresholds.
 
-To address this, we implemented a hybrid architecture:
+### 🎯 Reward Framework
+The agent is evaluated using a normalized OpenEnv reward structure:
+* **1.0** → Correct mitigation (blocking a threat) or correct pass-through (monitoring safe traffic).
+* **0.5** → Partial mitigation (rate-limiting a severe threat instead of blocking).
+* **0.0** → Incorrect action (false positive block or allowing a threat).
 
-### ⚡ Fast Reflex Layer (Scikit-Learn)
-* A lightweight, custom-trained model processes live telemetry (CPU usage, packet rate)
-* Executes decisions—Monitor, Rate Limit, Block—within milliseconds
-* Ensures immediate response to threats
+## 🛠️ API & Data Models
+The environment exposes the standard OpenEnv endpoints:
+* `POST /reset` → Initializes the task and returns the initial state.
+* `POST /step` → Accepts an `Action` (monitor, rate_limit, block) and returns the new `Observation` and `Reward`.
+* `GET /state` → Returns the current simulation variables.
 
-### 🧠 Deep Analysis Layer (Hugging Face LLM)
-* Triggered after mitigation
-* Generates human-readable threat analysis based on telemetry
-* Provides interpretability without affecting real-time performance
-* This analysis is generated asynchronously and displayed in the live audit log.
+All inputs and outputs are strictly typed using **Pydantic** to ensure consistent parsing by the automated evaluation pipeline.
 
-This separation enables both low-latency response and high-level reasoning, similar to real-world security systems.
-
-## ⚙️ Environment Design
-The system is powered by a custom FastAPI backend that simulates a dynamic network environment. At each timestep, the system observes network state, selects an action, updates the environment, and assigns a reward—forming a continuous decision loop.
-
-### 🌪️ Chaos Engine
-Continuously generates synthetic traffic and supports multiple difficulty levels:
-* **Easy:** Normal traffic patterns
-* **Medium:** Volumetric DDoS spikes
-* **Hard:** Stealth attacks (low CPU, high packet rate)
-
-### 🎯 Reward System
-The agent is evaluated using a normalized reward framework:
-* **Rewards:** `+0.40` → correct mitigation or correct pass-through
-* **Penalties:** `-0.30` → false positives or incorrect actions
-
-The system is optimized to balance security and service continuity.
-
-## 🛠️ Tech Stack
-* **AI / ML:** Python, Scikit-Learn (Joblib), Hugging Face LLM (via OpenAI-compatible API)
-* **Backend:** FastAPI, Uvicorn (async server, port 7860 for deployment)
-* **Frontend:** HTML5, JavaScript, Tailwind CSS, Chart.js (real-time visualization)
-* **Deployment:** Docker, Hugging Face Spaces
-
-## 🚀 Running Locally
-To run the environment locally:
+## 🚀 Running the Evaluation
+To run the automated agent against the environment locally:
 
 ```bash
 git clone <repo-url>
 cd <repo-folder>
-pip install fastapi uvicorn pandas scikit-learn joblib openai
-python3 live_defense.py
+pip install fastapi uvicorn pydantic requests openai
