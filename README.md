@@ -59,9 +59,6 @@ At each timestep, the agent observes the environment state, selects an action, a
 
 All inputs and outputs are strictly typed using **Pydantic** to ensure reliable parsing by the automated evaluation system.
 
-##💡 Key Contribution
-
-CLAIRS demonstrates how real-time cybersecurity can be modeled as an interactive reinforcement learning environment, combining fast deterministic response with high-level reasoning through hybrid AI design.
 ---
 
 ## 🚀 Running the Evaluation
@@ -72,6 +69,6 @@ cd <repo-folder>
 pip install fastapi uvicorn pydantic requests openai
 python3 inference.py
 
-##💡 Key Contribution
+💡 Key Contribution
 
 CLAIRS demonstrates how real-time cybersecurity can be modeled as an interactive reinforcement learning environment, combining fast deterministic response with high-level reasoning through hybrid AI design.
