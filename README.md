@@ -64,7 +64,7 @@ All inputs and outputs are strictly typed using **Pydantic** to ensure reliable 
 ## 🚀 Running the Evaluation
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/antonyjasfer/CLAIRS-Autonomous-Defense
 cd <repo-folder>
 pip install fastapi uvicorn pydantic requests openai
 python3 inference.py
