@@ -4,7 +4,6 @@ description: "Autonomous Defense Environment for IoT Networks. The agent must mo
 author: "Meta Vision"
 tags: ["cybersecurity", "networking", "ddos-mitigation", "iot"]
 
-# These are the 3 mandatory tasks the bot will test your AI against
 tasks:
   - id: "task_1_easy"
     name: "Normal Traffic Handling"
