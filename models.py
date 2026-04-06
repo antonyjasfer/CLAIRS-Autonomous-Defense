@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 
-# 1. What the AI SEES (The State/Telemetry)
 class Observation(BaseModel):
     cpu_usage_percent: float = Field(
         ..., 
@@ -15,14 +14,12 @@ class Observation(BaseModel):
         description="Number of active connections to the device."
     )
 
-# 2. What the AI DOES (The Decision)
 class Action(BaseModel):
     decision: str = Field(
         ..., 
         description="The mitigation action to take. Must be one of: 'monitor', 'rate_limit', or 'block'."
     )
 
-# 3. How the AI is SCORED (The Grade)
 class Reward(BaseModel):
     score: float = Field(
         ..., 
