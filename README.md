@@ -64,7 +64,7 @@ To build and run the OpenEnv environment locally using Docker:
 docker build -t clairs .
 docker run -p 7860:7860 clairs
 
-git clone [https://github.com/antonyjasfer/CLAIRS-Autonomous-Defense.git](https://github.com/antonyjasfer/CLAIRS-Autonomous-Defense.git)
+git clone https://github.com/antonyjasfer/CLAIRS-Autonomous-Defense.git
 cd CLAIRS-Autonomous-Defense
 pip install fastapi uvicorn pydantic requests openai
 uvicorn live_defense:app --host 0.0.0.0 --port 7860
