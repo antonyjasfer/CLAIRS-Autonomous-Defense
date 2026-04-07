@@ -1,0 +1,14 @@
+version: "1.0"
+name: clairs-network-defense
+description: "CLAIRS: Autonomous Defense Environment for IoT DDoS Mitigation"
+tasks:
+  - id: task_1_easy
+    description: "Normal Traffic Handling. The agent must monitor safe traffic without triggering false positives."
+  - id: task_2_medium
+    description: "Volumetric DDoS. The agent must detect and block a massive packet flood (PPS > 5000)."
+  - id: task_3_hard
+    description: "Stealth DDoS. The agent must detect a highly targeted attack that bypasses standard CPU thresholds and apply rate limiting."
+endpoints:
+  reset: /reset
+  step: /step
+  state: /state
