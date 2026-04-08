@@ -1,79 +1,89 @@
 import os
 import requests
+import sys
 from openai import OpenAI
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-Coder-32B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
-
-def log_start(task, env, model):
-    print(f"[START] task={task} env={env} model={model}", flush=True)
-
-def log_step(step, action, reward, done, error):
-    done_str = "true" if done else "false"
-    err_str = "null" if error is None else f'"{error}"'
-    print(f"[STEP] step={step} action={action} reward={float(reward):.2f} done={done_str} error={err_str}", flush=True)
-
-def log_end(success, steps, score, rewards):
-    succ_str = "true" if success else "false"
-    rews_str = ",".join([f"{float(r):.2f}" for r in rewards])
-    print(f"[END] success={succ_str} steps={steps} score={score:.2f} rewards={rews_str}", flush=True)
+ENV_URL = "http://localhost:7860"
 
 def get_action(obs):
-    prompt = f"System telemetry: CPU {obs['cpu_usage_percent']}%, PPS {obs['packet_rate_pps']}. Respond with exactly one word: monitor, rate_limit, or block."
+    if isinstance(obs, dict) and "observation" in obs:
+        obs_data = obs["observation"]
+    else:
+        obs_data = obs
+        
+    if isinstance(obs_data, dict):
+        cpu = obs_data.get("cpu_usage_percent", 0.0)
+        pps = obs_data.get("packet_rate_pps", 0.0)
+    else:
+        cpu = 0.0
+        pps = 0.0
+
+    prompt = f"System telemetry: CPU {cpu}%, PPS {pps}. Respond with exactly one word: monitor, rate_limit, or block."
+
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=10
+            messages=[
+                {"role": "system", "content": "You are a network defense AI. Output only one word."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=10,
+            temperature=0.1
         )
-        text = response.choices[0].message.content.strip().lower()
-        if "block" in text:
+        action = response.choices[0].message.content.strip().lower()
+        
+        if "block" in action: 
             return "block"
-        if "rate" in text:
+        if "rate_limit" in action or "limit" in action: 
             return "rate_limit"
         return "monitor"
-    except Exception:
+        
+    except Exception as e:
+        print(f"LLM Error: {e}")
         return "monitor"
 
 def run_episode(task_id):
-    log_start(task=task_id, env="clairs-network-defense", model=MODEL_NAME)
+    print(f"[START] Task {task_id}")
     
     try:
-        res = requests.post("http://127.0.0.1:7860/reset", json={"task_id": task_id}).json()
-        obs = res.get("observation", {})
-    except Exception:
-        obs = {"cpu_usage_percent": 0.0, "packet_rate_pps": 0, "active_connections": 0}
+        res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id})
+        res.raise_for_status()
+        obs = res.json()
+    except Exception as e:
+        print(f"Failed to reset environment: {e}")
+        return
 
-    done = False
-    step_count = 0
-    rewards = []
+    total_reward = 0.0
     
-    while not done and step_count < 10:
-        step_count += 1
+    for step in range(10):
         action = get_action(obs)
         
         try:
-            step_res = requests.post("http://127.0.0.1:7860/step", json={"decision": action}).json()
-            obs = step_res.get("observation", obs)
-            reward = step_res.get("reward", 0.0)
-            done = step_res.get("done", True)
-            error = None
-        except Exception as e:
-            reward = 0.0
-            done = True
-            error = str(e)
+            res = requests.post(f"{ENV_URL}/step", json={"action": action})
+            res.raise_for_status()
+            step_data = res.json()
             
-        rewards.append(reward)
-        log_step(step=step_count, action=action, reward=reward, done=done, error=error)
-        
-    score = sum(rewards) / len(rewards) if rewards else 0.0
-    success = score >= 0.8
-    log_end(success=success, steps=step_count, score=score, rewards=rewards)
+            obs = step_data
+            reward = step_data.get("reward", 0.0)
+            done = step_data.get("done", False)
+            total_reward += reward
+            
+            print(f"[STEP] Action: {action} | Reward: {reward}")
+            
+            if done:
+                break
+                
+        except Exception as e:
+            print(f"Failed during step: {e}")
+            break
+            
+    print(f"[END] Total Reward: {total_reward}")
 
 if __name__ == "__main__":
-    tasks = ["task_1_easy", "task_2_medium", "task_3_hard"]
-    for t in tasks:
-        run_episode(t)
+    task = sys.argv[1] if len(sys.argv) > 1 else "task_1_easy"
+    run_episode(task)
