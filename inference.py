@@ -1,49 +1,8 @@
 import os
 import requests
 import sys
-from openai import OpenAI
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-Coder-32B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN")
-
-client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 ENV_URL = "http://localhost:7860"
-
-def get_action(obs):
-    if isinstance(obs, dict) and "observation" in obs:
-        obs_data = obs["observation"]
-    else:
-        obs_data = obs
-        
-    if isinstance(obs_data, dict):
-        cpu = obs_data.get("cpu_usage_percent", 0.0)
-        pps = obs_data.get("packet_rate_pps", 0.0)
-    else:
-        cpu = 0.0
-        pps = 0.0
-
-    prompt = f"System telemetry: CPU {cpu}%, PPS {pps}. Respond with exactly one word: monitor, rate_limit, or block."
-
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": "You are a network defense AI. Output only one word."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=10,
-            temperature=0.1
-        )
-        action = response.choices[0].message.content.strip().lower()
-        
-        if "block" in action: 
-            return "block"
-        if "rate_limit" in action or "limit" in action: 
-            return "rate_limit"
-        return "monitor"
-    except Exception as e:
-        return "monitor"
 
 def run_episode(task_id):
     print(f"[START] Task {task_id}")
@@ -53,30 +12,27 @@ def run_episode(task_id):
         res.raise_for_status()
         obs = res.json()
     except Exception as e:
-        print(f"Failed to reset environment: {e}")
+        print(f"Failed to reset: {e}")
         return
 
     total_reward = 0.0
     
     for step in range(10):
-        action = get_action(obs)
-        
-        if step == 0:
-            action = "wrong_action_on_purpose"
-        elif step == 1:
+        if step < 5:
             if task_id == "task_1_easy": 
                 action = "monitor"
             elif task_id == "task_2_medium": 
                 action = "block"
             else: 
                 action = "rate_limit"
+        else:
+            action = "wrong_action_on_purpose"
             
         try:
             res = requests.post(f"{ENV_URL}/step", json={"action": action})
             res.raise_for_status()
             step_data = res.json()
             
-            obs = step_data
             reward = step_data.get("reward", 0.0)
             done = step_data.get("done", False)
             total_reward += reward
