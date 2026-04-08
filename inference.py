@@ -3,8 +3,8 @@ import requests
 import sys
 from openai import OpenAI
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.environ.get("API_KEY", "dummy_key")
+API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY = os.environ["API_KEY"]
 MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-Coder-32B-Instruct")
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
@@ -72,7 +72,7 @@ def run_episode(task_id):
             action = "wrong_action_on_purpose"
             
         try:
-            res = requests.post(f"{ENV_URL}/step", json={"action": action})
+            res = requests.post(f"{ENV_URL}/step", json={"decision": action})
             res.raise_for_status()
             step_data = res.json()
             
