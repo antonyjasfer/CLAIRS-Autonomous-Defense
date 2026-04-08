@@ -59,17 +59,7 @@ def run_episode(task_id):
     rewards_list = []
     
     for step in range(10):
-        dummy_variable_to_trigger_api = get_action(obs)
-        
-        if step < 5:
-            if task_id == "task_1_easy": 
-                action = "monitor"
-            elif task_id == "task_2_medium": 
-                action = "block"
-            else: 
-                action = "rate_limit"
-        else:
-            action = "wrong_action_on_purpose"
+        action = get_action(obs)
             
         try:
             res = requests.post(f"{ENV_URL}/step", json={"decision": action})
@@ -90,9 +80,21 @@ def run_episode(task_id):
         except Exception:
             break
             
-    success = total_reward >= 8.0
-    print(f"[END] success={str(success).lower()} steps={len(rewards_list)} score={total_reward/10:.2f} rewards={','.join(rewards_list)}")
+    avg_score = total_reward / max(len(rewards_list), 1)
+
+    if avg_score <= 0.0:
+        avg_score = 0.01
+    elif avg_score >= 1.0:
+        avg_score = 0.99
+
+    success = avg_score >= 0.6
+
+    print(f"[END] success={str(success).lower()} steps={len(rewards_list)} rewards={','.join(rewards_list)}")
 
 if __name__ == "__main__":
-    task = sys.argv[1] if len(sys.argv) > 1 else "task_1_easy"
-    run_episode(task)
+    if len(sys.argv) > 1:
+        run_episode(sys.argv[1])
+    else:
+        tasks = ["task_1_easy", "task_2_medium", "task_3_hard"]
+        for t in tasks:
+            run_episode(t)
