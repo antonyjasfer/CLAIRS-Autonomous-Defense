@@ -60,7 +60,7 @@ def run_episode(task_id):
     
     for step in range(10):
         action = get_action(obs)
-            
+                
         try:
             res = requests.post(f"{ENV_URL}/step", json={"decision": action})
             res.raise_for_status()
