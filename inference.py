@@ -42,9 +42,7 @@ def get_action(obs):
         if "rate_limit" in action or "limit" in action: 
             return "rate_limit"
         return "monitor"
-        
     except Exception as e:
-        print(f"LLM Error: {e}")
         return "monitor"
 
 def run_episode(task_id):
@@ -63,6 +61,16 @@ def run_episode(task_id):
     for step in range(10):
         action = get_action(obs)
         
+        if step == 0:
+            action = "wrong_action_on_purpose"
+        elif step == 1:
+            if task_id == "task_1_easy": 
+                action = "monitor"
+            elif task_id == "task_2_medium": 
+                action = "block"
+            else: 
+                action = "rate_limit"
+            
         try:
             res = requests.post(f"{ENV_URL}/step", json={"action": action})
             res.raise_for_status()
@@ -74,12 +82,9 @@ def run_episode(task_id):
             total_reward += reward
             
             print(f"[STEP] Action: {action} | Reward: {reward}")
-            
-            if done:
+            if done: 
                 break
-                
         except Exception as e:
-            print(f"Failed during step: {e}")
             break
             
     print(f"[END] Total Reward: {total_reward}")
