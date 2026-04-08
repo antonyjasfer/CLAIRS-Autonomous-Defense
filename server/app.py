@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import random
@@ -7,10 +7,10 @@ import uvicorn
 app = FastAPI(title="CLAIRS Autonomous Defense")
 
 class ResetRequest(BaseModel):
-    task_id: str
+    task_id: str = "task_1_easy"
 
 class Action(BaseModel):
-    action: str
+    action: str = "monitor"
 
 class Observation(BaseModel):
     cpu_usage_percent: float
@@ -32,17 +32,19 @@ current_state = {
 }
 
 @app.post("/reset")
-def reset(req: ResetRequest):
-    current_state["task_id"] = req.task_id
+def reset(req: Optional[ResetRequest] = None):
+    # If the bot sends an empty ping, default to task_1_easy
+    task_id = req.task_id if req else "task_1_easy"
+    current_state["task_id"] = task_id
     current_state["step_count"] = 0
     
-    if req.task_id == "task_1_easy":
+    if task_id == "task_1_easy":
         current_state["pps"] = random.uniform(20, 150)
         current_state["cpu"] = random.uniform(5, 15)
-    elif req.task_id == "task_2_medium":
+    elif task_id == "task_2_medium":
         current_state["pps"] = random.uniform(10000, 50000)
         current_state["cpu"] = random.uniform(80, 100)
-    elif req.task_id == "task_3_hard":
+    elif task_id == "task_3_hard":
         current_state["pps"] = random.uniform(8000, 25000)
         current_state["cpu"] = random.uniform(20, 40)
     else:
@@ -58,13 +60,14 @@ def reset(req: ResetRequest):
     }
 
 @app.post("/step", response_model=StepResponse)
-def step(action: Action):
+def step(action: Optional[Action] = None):
     current_state["step_count"] += 1
     reward = 0.0
     done = current_state["step_count"] >= 10
     
     task = current_state["task_id"]
-    act = action.action.lower()
+    # If bot sends empty action, default to monitor
+    act = action.action.lower() if action else "monitor"
     
     if task == "task_1_easy":
         if act == "monitor": reward = 1.0
