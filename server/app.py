@@ -31,7 +31,6 @@ current_state = {
     "system_health": 100.0
 }
 
-# Deterministic attack trajectories (replaces random.uniform)
 TRAJECTORIES = {
     "task_1_easy": [
         {"pps": 100, "cpu": 10.0}, {"pps": 110, "cpu": 11.0}, {"pps": 95, "cpu": 9.5}, 
@@ -60,7 +59,6 @@ def reset(req: Optional[ResetRequest] = None):
     current_state["step_count"] = 0
     current_state["system_health"] = 100.0
     
-    # Load first step of trajectory
     initial_data = TRAJECTORIES[task_id][0]
     current_state["pps"] = initial_data["pps"]
     current_state["cpu"] = initial_data["cpu"]
@@ -78,38 +76,35 @@ def step(payload: Optional[ActionPayload] = None):
     act = payload.decision.lower() if payload else "monitor"
     step_idx = current_state["step_count"]
     
-    # Calculate Dynamic Partial Reward based on action impact
     reward = 0.01
     
     if task == "task_1_easy":
         if act == "monitor": reward = 0.99
-        elif act == "rate_limit": reward = 0.40 # False positive penalty
-        elif act == "block": reward = 0.10      # Severe false positive penalty
+        elif act == "rate_limit": reward = 0.40
+        elif act == "block": reward = 0.10
             
     elif task == "task_2_medium":
-        if step_idx < 1: # Traffic is normal
+        if step_idx < 1:
             reward = 0.99 if act == "monitor" else 0.20
-        else: # Volumetric attack active
+        else:
             if act == "block": reward = 0.99
-            elif act == "rate_limit": reward = 0.60 # Partial mitigation
-            elif act == "monitor": reward = 0.01    # Complete failure
+            elif act == "rate_limit": reward = 0.60
+            elif act == "monitor": reward = 0.01
                 
     elif task == "task_3_hard":
-        if step_idx < 1: # Traffic is normal
+        if step_idx < 1:
             reward = 0.99 if act == "monitor" else 0.20
-        else: # Stealth attack active
+        else:
             if act == "rate_limit": reward = 0.99
-            elif act == "block": reward = 0.40      # Too aggressive for stealth
-            elif act == "monitor": reward = 0.01    # Allowed attack
+            elif act == "block": reward = 0.40
+            elif act == "monitor": reward = 0.01
 
-    # Advance state to the next deterministic step
     current_state["step_count"] += 1
     done = current_state["step_count"] >= 10
     
     next_step_idx = min(current_state["step_count"], 9)
     next_data = TRAJECTORIES[task][next_step_idx]
     
-    # Simulate environment reacting to agent's action
     mitigation_factor = 1.0
     if act == "block": mitigation_factor = 0.05
     elif act == "rate_limit": mitigation_factor = 0.40
@@ -129,6 +124,14 @@ def step(payload: Optional[ActionPayload] = None):
         reward=reward,
         done=done,
         info={"mitigation_applied": act}
+    )
+
+@app.get("/state", response_model=Observation)
+def state():
+    return Observation(
+        cpu_usage_percent=current_state.get("cpu", 0.0),
+        packet_rate_pps=current_state.get("pps", 0.0),
+        active_connections=current_state.get("connections", 0)
     )
 
 @app.get("/health")
