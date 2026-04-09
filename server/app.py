@@ -96,10 +96,6 @@ def step(payload: Optional[ActionPayload] = None):
         info={}
     )
 
-@app.get("/state")
-def state():
-    return current_state
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
