@@ -60,7 +60,7 @@ def run_episode(task_id):
     
     for step in range(10):
         action = get_action(obs)
-                
+                        
         try:
             res = requests.post(f"{ENV_URL}/step", json={"decision": action})
             res.raise_for_status()
@@ -80,21 +80,10 @@ def run_episode(task_id):
         except Exception:
             break
             
-    avg_score = total_reward / max(len(rewards_list), 1)
-
-    if avg_score <= 0.0:
-        avg_score = 0.01
-    elif avg_score >= 1.0:
-        avg_score = 0.99
-
-    success = avg_score >= 0.6
-
+    success = total_reward >= 5.0
     print(f"[END] success={str(success).lower()} steps={len(rewards_list)} rewards={','.join(rewards_list)}")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        run_episode(sys.argv[1])
-    else:
-        tasks = ["task_1_easy", "task_2_medium", "task_3_hard"]
-        for t in tasks:
-            run_episode(t)
+    tasks = ["task_1_easy", "task_2_medium", "task_3_hard"]
+    for t in tasks:
+        run_episode(t)
