@@ -1,5 +1,7 @@
-FROM python:3.10
+FROM python:3.10-slim
 WORKDIR /app
+COPY pyproject.toml .
+RUN pip install .
 COPY . .
-RUN pip install fastapi uvicorn pydantic requests openai openenv-core
+EXPOSE 7860
 CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "7860"]
