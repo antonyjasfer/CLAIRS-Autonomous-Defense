@@ -15,7 +15,7 @@ class Observation(BaseModel):
     )
 
 class Action(BaseModel):
-    decision: str = Field(
+    decision: str = Field(kjb
         ..., 
         description="The mitigation action to take. Must be one of: 'monitor', 'rate_limit', or 'block'."
     )
