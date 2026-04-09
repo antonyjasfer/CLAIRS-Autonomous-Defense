@@ -2,80 +2,93 @@ import os
 import requests
 from openai import OpenAI
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
-API_KEY = os.environ.get("API_KEY", "dummy")
-MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-Coder-32B-Instruct")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api-inference.huggingface.co/v1/")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN", "dummy_token")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
-def get_action(telemetry_history):
-    history_str = " -> ".join(
-        [f"(CPU {h['cpu']:.1f}%, PPS {h['pps']:.0f})" for h in telemetry_history]
-    )
+def log_start(task, env, model):
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
-    prompt = f"""Analyze the following network telemetry trend: {history_str}
-Choices: monitor, rate_limit, block. Respond with exactly one word."""
+def log_step(step, action, reward, done, error):
+    done_str = "true" if done else "false"
+    err_str = "null" if error is None else f'"{error}"'
+    print(f"[STEP] step={step} action={action} reward={float(reward):.2f} done={done_str} error={err_str}", flush=True)
 
+def log_end(success, steps, score, rewards):
+    succ_str = "true" if success else "false"
+    rews_str = ",".join([f"{float(r):.2f}" for r in rewards])
+    print(f"[END] success={succ_str} steps={steps} score={score:.2f} rewards={rews_str}", flush=True)
+
+def get_action(history):
+    history_str = " -> ".join([f"(CPU {h['cpu']:.1f}%, PPS {h['pps']:.0f})" for h in history])
+    prompt = f"System telemetry trend: {history_str}. Respond with exactly one word: monitor, rate_limit, or block."
+    
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a network defense AI. Output only one word."},
+                {"role": "system", "content": "You are a strict network defense AI. Output only one word."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=5,
+            max_tokens=10,
             temperature=0.1
         )
-        action = response.choices[0].message.content.strip().lower()
-        if "block" in action: return "block"
-        if "rate_limit" in action or "limit" in action: return "rate_limit"
+        text = response.choices[0].message.content.strip().lower()
+        if "block" in text:
+            return "block"
+        if "limit" in text or "rate" in text:
+            return "rate_limit"
         return "monitor"
-    except:
+    except Exception:
         return "monitor"
 
 def run_episode(task_id):
-    print(f"[START] task={task_id}")
-    try:
-        res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id})
-        obs = res.json()
-    except:
-        return
-
-    total_reward = 0.0
-    rewards_list = []
-    telemetry_history = []
+    log_start(task=task_id, env="clairs-network-defense", model=MODEL_NAME)
     
-    for step in range(10):
-        if isinstance(obs, dict) and "observation" in obs:
-            obs_data = obs["observation"]
-        else:
-            obs_data = obs
-            
-        cpu = obs_data.get("cpu_usage_percent", 0.0)
-        pps = obs_data.get("packet_rate_pps", 0.0)
-        telemetry_history.append({"cpu": cpu, "pps": pps})
-        
-        if len(telemetry_history) > 3:
-            telemetry_history.pop(0)
+    try:
+        res = requests.post("http://127.0.0.1:7860/reset", json={"task_id": task_id}).json()
+        obs = res if "cpu_usage_percent" in res else res.get("observation", {})
+    except Exception:
+        obs = {"cpu_usage_percent": 0.0, "packet_rate_pps": 0.0, "active_connections": 0}
 
-        action = get_action(telemetry_history)
-                        
+    done = False
+    step_count = 0
+    rewards = []
+    history = []
+    
+    while not done and step_count < 10:
+        step_count += 1
+        
+        cpu = obs.get("cpu_usage_percent", 0.0)
+        pps = obs.get("packet_rate_pps", 0.0)
+        history.append({"cpu": cpu, "pps": pps})
+        
+        if len(history) > 3:
+            history.pop(0)
+            
+        action = get_action(history)
+        
         try:
-            res = requests.post(f"{ENV_URL}/step", json={"decision": action})
-            step_data = res.json()
-            obs = step_data
-            reward = step_data.get("reward", 0.0)
-            total_reward += reward
-            rewards_list.append(f"{reward:.2f}")
-            if step_data.get("done", False): break
-        except:
-            break
- 
-    score = max(0.01, min(0.99, total_reward))
-    success = score >= 0.5
-    print(f"[END] success={str(success).lower()} steps={len(rewards_list)} score={score:.2f} rewards={','.join(rewards_list)}")
+            step_res = requests.post("http://127.0.0.1:7860/step", json={"decision": action}).json()
+            obs = step_res.get("observation", obs)
+            reward = step_res.get("reward", 0.0)
+            done = step_res.get("done", True)
+            error = None
+        except Exception as e:
+            reward = 0.0
+            done = True
+            error = str(e)
+            
+        rewards.append(reward)
+        log_step(step=step_count, action=action, reward=reward, done=done, error=error)
+        
+    score = sum(rewards) / len(rewards) if rewards else 0.0
+    success = score >= 0.8
+    log_end(success=success, steps=step_count, score=score, rewards=rewards)
 
 if __name__ == "__main__":
-    for t in ["task_1_easy", "task_2_medium", "task_3_hard"]:
+    tasks = ["task_1_easy", "task_2_medium", "task_3_hard"]
+    for t in tasks:
         run_episode(t)
