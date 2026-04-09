@@ -3,33 +3,34 @@ import requests
 import sys
 from openai import OpenAI
 
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://api.openai.com/v1")
+API_KEY = os.environ.get("API_KEY", "dummy_key")
 MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-Coder-32B-Instruct")
 
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
 ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
 
-def get_action(obs):
-    if isinstance(obs, dict) and "observation" in obs:
-        obs_data = obs["observation"]
-    else:
-        obs_data = obs
-        
-    if isinstance(obs_data, dict):
-        cpu = obs_data.get("cpu_usage_percent", 0.0)
-        pps = obs_data.get("packet_rate_pps", 0.0)
-    else:
-        cpu = 0.0
-        pps = 0.0
+def get_action(telemetry_history):
+    history_str = " -> ".join(
+        [f"(CPU {h['cpu']:.1f}%, PPS {h['pps']:.0f})" for h in telemetry_history]
+    )
 
-    prompt = f"System telemetry: CPU {cpu}%, PPS {pps}. Respond with exactly one word: monitor, rate_limit, or block."
+    prompt = f"""You are CLAIRS, an advanced autonomous IoT network defense AI. 
+Analyze the following rolling network telemetry trend over the last few steps:
+{history_str}
+
+Evaluate the trend:
+- If traffic is low and stable, output 'monitor'.
+- If traffic is rising suspiciously or moderately high, output 'rate_limit'.
+- If traffic is spiking massively (severe CPU/PPS load), output 'block'.
+
+Respond with EXACTLY ONE WORD from the choices above. No punctuation, no explanation."""
 
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a network defense AI. Output only one word."},
+                {"role": "system", "content": "You are a precise network defense AI. Output only one word."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=10,
@@ -52,14 +53,29 @@ def run_episode(task_id):
         res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id})
         res.raise_for_status()
         obs = res.json()
-    except Exception:
+    except Exception as e:
+        print(f"Error resetting environment: {e}")
         return
 
     total_reward = 0.0
     rewards_list = []
+    telemetry_history = []
     
     for step in range(10):
-        action = get_action(obs)
+        if isinstance(obs, dict) and "observation" in obs:
+            obs_data = obs["observation"]
+        else:
+            obs_data = obs
+            
+        current_cpu = obs_data.get("cpu_usage_percent", 0.0) if isinstance(obs_data, dict) else 0.0
+        current_pps = obs_data.get("packet_rate_pps", 0.0) if isinstance(obs_data, dict) else 0.0
+        
+        telemetry_history.append({"cpu": current_cpu, "pps": current_pps})
+        
+        if len(telemetry_history) > 3:
+            telemetry_history.pop(0)
+
+        action = get_action(telemetry_history)
                         
         try:
             res = requests.post(f"{ENV_URL}/step", json={"decision": action})
@@ -80,7 +96,7 @@ def run_episode(task_id):
         except Exception:
             break
  
-    score = total_reward / max(len(rewards_list), 1)
+    score = total_reward
     
     if score <= 0.0:
         score = 0.01
