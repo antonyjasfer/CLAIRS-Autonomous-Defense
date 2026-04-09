@@ -20,3 +20,5 @@ To ensure absolute stability within the strict automated Phase 1 OpenEnv evaluat
 2. Spin up the FastAPI environment:
    ```bash
    uvicorn server.app:app --host 0.0.0.0 --port 7860
+3. Run the autonomous agent:
+   python inference.py
