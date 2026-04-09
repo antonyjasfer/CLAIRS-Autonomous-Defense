@@ -9,8 +9,8 @@ app = FastAPI(title="CLAIRS Autonomous Defense")
 class ResetRequest(BaseModel):
     task_id: str = "task_1_easy"
 
-class Action(BaseModel):
-    action: str = "monitor"
+class ActionPayload(BaseModel):
+    decision: str = "monitor"
 
 class Observation(BaseModel):
     cpu_usage_percent: float
@@ -33,7 +33,6 @@ current_state = {
 
 @app.post("/reset")
 def reset(req: Optional[ResetRequest] = None):
-    # If the bot sends an empty ping, default to task_1_easy
     task_id = req.task_id if req else "task_1_easy"
     current_state["task_id"] = task_id
     current_state["step_count"] = 0
@@ -60,26 +59,23 @@ def reset(req: Optional[ResetRequest] = None):
     }
 
 @app.post("/step", response_model=StepResponse)
-def step(action: Optional[Action] = None):
+def step(payload: Optional[ActionPayload] = None):
     current_state["step_count"] += 1
-    reward = 0.0
     done = current_state["step_count"] >= 10
     
     task = current_state["task_id"]
-    # If bot sends empty action, default to monitor
-    act = action.action.lower() if action else "monitor"
+    act = payload.decision.lower() if payload else "monitor"
+    
+    reward = 0.1
     
     if task == "task_1_easy":
-        if act == "monitor": reward = 1.0
-        else: reward = 0.0
+        if act == "monitor": reward = 0.9
     elif task == "task_2_medium":
-        if act == "block": reward = 1.0
+        if act == "block": reward = 0.9
         elif act == "rate_limit": reward = 0.5
-        else: reward = 0.0
     elif task == "task_3_hard":
-        if act == "rate_limit": reward = 1.0
+        if act == "rate_limit": reward = 0.9
         elif act == "block": reward = 0.5
-        else: reward = 0.0
 
     current_state["pps"] = current_state["pps"] * random.uniform(0.9, 1.1)
     current_state["cpu"] = min(100.0, current_state["cpu"] * random.uniform(0.9, 1.1))
