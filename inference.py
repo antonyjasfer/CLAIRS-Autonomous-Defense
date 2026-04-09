@@ -73,18 +73,19 @@ def run_episode(task_id):
         try:
             step_res = requests.post("http://127.0.0.1:7860/step", json={"decision": action}).json()
             obs = step_res.get("observation", obs)
-            reward = step_res.get("reward", 0.0)
+            reward = step_res.get("reward", 0.01)
             done = step_res.get("done", True)
             error = None
         except Exception as e:
-            reward = 0.0
+            reward = 0.01
             done = True
             error = str(e)
             
         rewards.append(reward)
         log_step(step=step_count, action=action, reward=reward, done=done, error=error)
         
-    score = sum(rewards) / len(rewards) if rewards else 0.0
+    raw_score = sum(rewards) / len(rewards) if rewards else 0.01
+    score = max(0.01, min(0.99, raw_score))
     success = score >= 0.8
     log_end(success=success, steps=step_count, score=score, rewards=rewards)
 
