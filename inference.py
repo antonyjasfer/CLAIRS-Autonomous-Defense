@@ -1,89 +1,110 @@
-import os
-import requests
-import sys
-from openai import OpenAI
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Dict, Any, Optional
+import random
+import uvicorn
 
-API_BASE_URL = os.environ["API_BASE_URL"]
-API_KEY = os.environ["API_KEY"]
-MODEL_NAME = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-Coder-32B-Instruct")
+app = FastAPI(title="CLAIRS Autonomous Defense")
 
-client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
-ENV_URL = os.environ.get("ENV_URL", "http://localhost:7860")
+class ResetRequest(BaseModel):
+    task_id: str = "task_1_easy"
 
-def get_action(obs):
-    if isinstance(obs, dict) and "observation" in obs:
-        obs_data = obs["observation"]
-    else:
-        obs_data = obs
-        
-    if isinstance(obs_data, dict):
-        cpu = obs_data.get("cpu_usage_percent", 0.0)
-        pps = obs_data.get("packet_rate_pps", 0.0)
-    else:
-        cpu = 0.0
-        pps = 0.0
+class ActionPayload(BaseModel):
+    decision: str = "monitor"
 
-    prompt = f"System telemetry: CPU {cpu}%, PPS {pps}. Respond with exactly one word: monitor, rate_limit, or block."
+class Observation(BaseModel):
+    cpu_usage_percent: float
+    packet_rate_pps: float
+    active_connections: int
 
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": "You are a network defense AI. Output only one word."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=10,
-            temperature=0.1
-        )
-        action = response.choices[0].message.content.strip().lower()
-        
-        if "block" in action: 
-            return "block"
-        if "rate_limit" in action or "limit" in action: 
-            return "rate_limit"
-        return "monitor"
-    except Exception:
-        return "monitor"
+class StepResponse(BaseModel):
+    observation: Observation
+    reward: float
+    done: bool
+    info: Dict[str, Any]
 
-def run_episode(task_id):
-    print(f"[START] task={task_id} env=clairs-network-defense model={MODEL_NAME}")
+current_state = {
+    "task_id": "task_1_easy",
+    "step_count": 0,
+    "cpu": 0.0,
+    "pps": 0.0,
+    "connections": 0
+}
+
+@app.post("/reset")
+def reset(req: Optional[ResetRequest] = None):
+    task_id = req.task_id if req else "task_1_easy"
+    current_state["task_id"] = task_id
+    current_state["step_count"] = 0
     
-    try:
-        res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id})
-        res.raise_for_status()
-        obs = res.json()
-    except Exception:
-        return
-
-    total_reward = 0.0
-    rewards_list = []
+    if task_id == "task_1_easy":
+        current_state["pps"] = random.uniform(20, 150)
+        current_state["cpu"] = random.uniform(5, 15)
+    elif task_id == "task_2_medium":
+        current_state["pps"] = random.uniform(10000, 50000)
+        current_state["cpu"] = random.uniform(80, 100)
+    elif task_id == "task_3_hard":
+        current_state["pps"] = random.uniform(8000, 25000)
+        current_state["cpu"] = random.uniform(20, 40)
+    else:
+        current_state["pps"] = random.uniform(20, 150)
+        current_state["cpu"] = random.uniform(5, 15)
+        
+    current_state["connections"] = int(current_state["pps"] / 10)
     
-    for step in range(10):
-        action = get_action(obs)
-                        
-        try:
-            res = requests.post(f"{ENV_URL}/step", json={"decision": action})
-            res.raise_for_status()
-            step_data = res.json()
-            
-            obs = step_data
-            reward = step_data.get("reward", 0.0)
-            done = step_data.get("done", False)
-            total_reward += reward
-            rewards_list.append(f"{reward:.2f}")
-            
-            done_str = "true" if done else "false"
-            print(f"[STEP] step={step+1} action={action} reward={reward:.2f} done={done_str} error=null")
-            
-            if done: 
-                break
-        except Exception:
-            break
-            
-    success = total_reward >= 5.0
-    print(f"[END] success={str(success).lower()} steps={len(rewards_list)} rewards={','.join(rewards_list)}")
+    return {
+        "cpu_usage_percent": current_state["cpu"],
+        "packet_rate_pps": current_state["pps"],
+        "active_connections": current_state["connections"]
+    }
+
+@app.post("/step", response_model=StepResponse)
+def step(payload: Optional[ActionPayload] = None):
+    current_state["step_count"] += 1
+    done = current_state["step_count"] >= 10
+    
+    task = current_state["task_id"]
+    act = payload.decision.lower() if payload else "monitor"
+    
+    # THE FIX: Tiny decimals so the 10-step sum stays under 1.0!
+    reward = 0.01 
+    
+    if task == "task_1_easy":
+        if act == "monitor": reward = 0.09
+    elif task == "task_2_medium":
+        if act == "block": reward = 0.09
+        elif act == "rate_limit": reward = 0.05
+    elif task == "task_3_hard":
+        if act == "rate_limit": reward = 0.09
+        elif act == "block": reward = 0.05
+
+    current_state["pps"] = current_state["pps"] * random.uniform(0.9, 1.1)
+    current_state["cpu"] = min(100.0, current_state["cpu"] * random.uniform(0.9, 1.1))
+    current_state["connections"] = int(current_state["pps"] / 10)
+
+    obs = Observation(
+        cpu_usage_percent=current_state["cpu"],
+        packet_rate_pps=current_state["pps"],
+        active_connections=current_state["connections"]
+    )
+    
+    return StepResponse(
+        observation=obs,
+        reward=reward,
+        done=done,
+        info={}
+    )
+
+@app.get("/state")
+def state():
+    return current_state
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+def main():
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
 
 if __name__ == "__main__":
-    tasks = ["task_1_easy", "task_2_medium", "task_3_hard"]
-    for t in tasks:
-        run_episode(t)
+    main()
