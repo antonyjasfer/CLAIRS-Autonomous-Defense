@@ -66,7 +66,6 @@ def step(payload: Optional[ActionPayload] = None):
     task = current_state["task_id"]
     act = payload.decision.lower() if payload else "monitor"
     
-    # THE FIX: Tiny decimals so the 10-step sum stays under 1.0!
     reward = 0.01 
     
     if task == "task_1_easy":
@@ -77,6 +76,8 @@ def step(payload: Optional[ActionPayload] = None):
     elif task == "task_3_hard":
         if act == "rate_limit": reward = 0.09
         elif act == "block": reward = 0.05
+
+    reward = max(0.01, min(0.09, reward))
 
     current_state["pps"] = current_state["pps"] * random.uniform(0.9, 1.1)
     current_state["cpu"] = min(100.0, current_state["cpu"] * random.uniform(0.9, 1.1))
