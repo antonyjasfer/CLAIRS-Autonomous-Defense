@@ -5,7 +5,7 @@ import uvicorn
 import random
 import math
 
-from models import Observation, Action, StepResponse
+from .models import Observation, Action, StepResponse
 
 app = FastAPI(
     title="CLAIRS Autonomous Defense Environment",
