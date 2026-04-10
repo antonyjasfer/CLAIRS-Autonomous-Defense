@@ -1,0 +1,30 @@
+version: "1.0"
+name: clairs-network-defense
+description: "CLAIRS: Autonomous Defense Environment for IoT DDoS Mitigation — dynamic traffic simulation with multi-criteria reward scoring."
+
+tasks:
+  - id: task_1_easy
+    description: >
+      Normal Traffic Monitoring. Benign IoT traffic with small natural fluctuations.
+      The agent must maintain monitoring without triggering false positives.
+
+  - id: task_2_medium
+    description: >
+      Volumetric DDoS Flood. A massive packet flood ramps from 5 000 to 50 000 PPS.
+      The agent must detect the surge and escalate to full blocking.
+
+  - id: task_3_hard
+    description: >
+      Stealth Low-and-Slow DDoS. A gradual attack that stays below obvious CPU thresholds.
+      The agent must detect the subtle PPS trend and apply rate limiting.
+
+  - id: task_4_expert
+    description: >
+      Multi-Wave APT Campaign. The attacker probes (PPS 4 000–12 000), retreats to
+      normal levels, then surges (PPS 15 000–45 000). The agent must not relax
+      defenses during the deceptive retreat phase.
+
+endpoints:
+  reset: /reset
+  step: /step
+  state: /state
