@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
-import random
+import secrets
 import math
 
 from .models import Observation, Action, StepResponse
+
+secure_random = secrets.SystemRandom()
 
 app = FastAPI(
     title="CLAIRS Autonomous Defense Environment",
@@ -143,12 +145,12 @@ class NetworkSimulator:
 
         first_phase = ATTACK_PROFILES[task_id]["phases"][0]
 
-        noise = random.uniform(0.88, 1.12)
+        noise = secure_random.uniform(0.88, 1.12)
         self.current_pps = first_phase["base_pps"] * noise
-        self.current_cpu = min(100.0, first_phase["base_cpu"] * random.uniform(0.9, 1.1))
-        self.current_connections = max(1, int(self.current_pps / 8 + random.randint(-5, 5)))
-        self.current_bandwidth = max(0.1, self.current_pps * 0.001 * random.uniform(0.8, 1.2))
-        self.current_memory = 25.0 + random.uniform(-3, 8)
+        self.current_cpu = min(100.0, first_phase["base_cpu"] * secure_random.uniform(0.9, 1.1))
+        self.current_connections = max(1, int(self.current_pps / 8 + secure_random.randint(-5, 5)))
+        self.current_bandwidth = max(0.1, self.current_pps * 0.001 * secure_random.uniform(0.8, 1.2))
+        self.current_memory = 25.0 + secure_random.uniform(-3, 8)
 
         return self._observation()
 
@@ -195,17 +197,17 @@ class NetworkSimulator:
 
     def _advance_traffic(self, action: str):
         phase = self._current_phase()
-        noise = random.uniform(0.88, 1.12)
+        noise = secure_random.uniform(0.88, 1.12)
 
         mitigation = 1.0
         if action == "block":
-            mitigation = 0.05 + random.uniform(0, 0.03)
+            mitigation = 0.05 + secure_random.uniform(0, 0.03)
         elif action == "rate_limit":
-            mitigation = 0.35 + random.uniform(0, 0.08)
+            mitigation = 0.35 + secure_random.uniform(0, 0.08)
 
         if phase["type"] == "normal":
             target_pps = phase["base_pps"] * noise
-            target_cpu = phase["base_cpu"] * random.uniform(0.9, 1.1)
+            target_cpu = phase["base_cpu"] * secure_random.uniform(0.9, 1.1)
         else:
             span = max(1, phase["end"] - phase["start"] - 1)
             progress = (self.step_count - phase["start"]) / span
@@ -220,24 +222,24 @@ class NetworkSimulator:
         alpha = 0.7
         self.current_pps = (1 - alpha) * self.current_pps + alpha * target_pps
         self.current_cpu = (1 - alpha) * self.current_cpu + alpha * target_cpu
-        self.current_connections = max(1, int(self.current_pps / 8 + random.randint(-3, 3)))
-        self.current_bandwidth = max(0.1, self.current_pps * 0.001 * random.uniform(0.85, 1.15))
+        self.current_connections = max(1, int(self.current_pps / 8 + secure_random.randint(-3, 3)))
+        self.current_bandwidth = max(0.1, self.current_pps * 0.001 * secure_random.uniform(0.85, 1.15))
 
-        mem_delta = random.uniform(-2, 3)
+        mem_delta = secure_random.uniform(-2, 3)
         if self._is_attack() and action == "monitor":
             mem_delta += self._severity() * 4
         self.current_memory = max(20.0, min(95.0, self.current_memory + mem_delta))
 
         if self._is_attack() and action == "monitor":
-            dmg = self._severity() * random.uniform(3.0, 7.0)
+            dmg = self._severity() * secure_random.uniform(3.0, 7.0)
             self.system_health = max(0.0, self.system_health - dmg)
             self.cumulative_damage += dmg
         elif self._is_attack() and action == "rate_limit":
-            dmg = self._severity() * random.uniform(0.5, 2.0)
+            dmg = self._severity() * secure_random.uniform(0.5, 2.0)
             self.system_health = max(0.0, self.system_health - dmg)
             self.cumulative_damage += dmg
         else:
-            self.system_health = min(100.0, self.system_health + random.uniform(0.3, 1.0))
+            self.system_health = min(100.0, self.system_health + secure_random.uniform(0.3, 1.0))
 
     def _compute_reward(self, action: str) -> float:
         is_attack = self._is_attack()
@@ -246,33 +248,33 @@ class NetworkSimulator:
 
         if not is_attack:
             if action == "monitor":
-                reward = 0.90 + random.uniform(0, 0.08)
+                reward = 0.90 + secure_random.uniform(0, 0.08)
             elif action == "rate_limit":
-                reward = 0.25 + random.uniform(0, 0.08)
+                reward = 0.25 + secure_random.uniform(0, 0.08)
                 self.false_positives += 1
             elif action == "block":
-                reward = 0.08 + random.uniform(0, 0.06)
+                reward = 0.08 + secure_random.uniform(0, 0.06)
                 self.false_positives += 1
         else:
             if severity > 0.6:
                 if action == "block":
-                    reward = 0.88 + random.uniform(0, 0.09)
+                    reward = 0.88 + secure_random.uniform(0, 0.09)
                 elif action == "rate_limit":
-                    reward = 0.48 + random.uniform(0, 0.10)
+                    reward = 0.48 + secure_random.uniform(0, 0.10)
                 else:
-                    reward = 0.03 + random.uniform(0, 0.05)
+                    reward = 0.03 + secure_random.uniform(0, 0.05)
             elif severity > 0.2:
                 if action == "rate_limit":
-                    reward = 0.85 + random.uniform(0, 0.09)
+                    reward = 0.85 + secure_random.uniform(0, 0.09)
                 elif action == "block":
-                    reward = 0.58 + random.uniform(0, 0.10)
+                    reward = 0.58 + secure_random.uniform(0, 0.10)
                 else:
-                    reward = 0.05 + random.uniform(0, 0.07)
+                    reward = 0.05 + secure_random.uniform(0, 0.07)
             else:
                 if action in ("rate_limit", "block"):
-                    reward = 0.78 + random.uniform(0, 0.10)
+                    reward = 0.78 + secure_random.uniform(0, 0.10)
                 else:
-                    reward = 0.10 + random.uniform(0, 0.08)
+                    reward = 0.10 + secure_random.uniform(0, 0.08)
 
             if self.attack_detected_step is None and action in ("rate_limit", "block"):
                 self.attack_detected_step = self.step_count
