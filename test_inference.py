@@ -1,5 +1,16 @@
 import pytest
-from inference import _classify_trend
+from inference import _classify_trend, get_action
+
+def test_get_action_exception(mocker):
+    # Mock the API client to raise an exception
+    mocker.patch('inference.client.chat.completions.create', side_effect=Exception("API Error"))
+
+    # Provide a simple history
+    history = [{"cpu": 20.0, "pps": 1000.0, "bw": 10.0, "health": 100.0}]
+
+    # get_action should catch the exception and return "monitor"
+    action = get_action(history)
+    assert action == "monitor"
 
 def test_classify_trend_unknown():
     assert _classify_trend([], "pps") == "UNKNOWN"
