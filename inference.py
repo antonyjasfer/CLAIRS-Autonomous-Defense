@@ -99,9 +99,7 @@ def get_action(history):
         return "monitor"
 
 
-def run_episode(task_id):
-    log_start(task=task_id, env="clairs-network-defense", model=MODEL_NAME)
-
+def reset_environment(task_id):
     try:
         res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}).json()
         obs = res if "cpu_usage_percent" in res else res.get("observation", {})
@@ -114,6 +112,30 @@ def run_episode(task_id):
             "memory_usage_percent": 30.0,
             "system_health": 100.0,
         }
+    return obs
+
+
+def step_environment(action, current_obs):
+    try:
+        step_res = requests.post(
+            f"{ENV_URL}/step", json={"decision": action}
+        ).json()
+        obs = step_res.get("observation", current_obs)
+        reward = step_res.get("reward", 0.01)
+        done = step_res.get("done", True)
+        error = None
+    except Exception as e:
+        obs = current_obs
+        reward = 0.01
+        done = True
+        error = str(e)
+    return obs, reward, done, error
+
+
+def run_episode(task_id):
+    log_start(task=task_id, env="clairs-network-defense", model=MODEL_NAME)
+
+    obs = reset_environment(task_id)
 
     done = False
     step_count = 0
@@ -134,18 +156,7 @@ def run_episode(task_id):
 
         action = get_action(history)
 
-        try:
-            step_res = requests.post(
-                f"{ENV_URL}/step", json={"decision": action}
-            ).json()
-            obs = step_res.get("observation", obs)
-            reward = step_res.get("reward", 0.01)
-            done = step_res.get("done", True)
-            error = None
-        except Exception as e:
-            reward = 0.01
-            done = True
-            error = str(e)
+        obs, reward, done, error = step_environment(action, obs)
 
         rewards.append(reward)
         log_step(step=step_count, action=action, reward=reward, done=done, error=error)
