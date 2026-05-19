@@ -241,53 +241,83 @@ class NetworkSimulator:
     def _compute_reward(self, action: str) -> float:
         is_attack = self._is_attack()
         severity = self._severity()
-        reward = 0.50
 
         if not is_attack:
-            if action == "monitor":
-                reward = 0.90 + random.uniform(0, 0.08)
-            elif action == "rate_limit":
-                reward = 0.25 + random.uniform(0, 0.08)
-                self.false_positives += 1
-            elif action == "block":
-                reward = 0.08 + random.uniform(0, 0.06)
-                self.false_positives += 1
+            reward = self._compute_normal_reward(action)
         else:
-            if severity > 0.6:
-                if action == "block":
-                    reward = 0.88 + random.uniform(0, 0.09)
-                elif action == "rate_limit":
-                    reward = 0.48 + random.uniform(0, 0.10)
-                else:
-                    reward = 0.03 + random.uniform(0, 0.05)
-            elif severity > 0.2:
-                if action == "rate_limit":
-                    reward = 0.85 + random.uniform(0, 0.09)
-                elif action == "block":
-                    reward = 0.58 + random.uniform(0, 0.10)
-                else:
-                    reward = 0.05 + random.uniform(0, 0.07)
-            else:
-                if action in ("rate_limit", "block"):
-                    reward = 0.78 + random.uniform(0, 0.10)
-                else:
-                    reward = 0.10 + random.uniform(0, 0.08)
+            reward = self._compute_attack_reward(action, severity)
+            reward = self._apply_early_detection_bonus(action, reward)
 
-            if self.attack_detected_step is None and action in ("rate_limit", "block"):
-                self.attack_detected_step = self.step_count
-                if self.step_count <= 3:
-                    reward = min(0.99, reward + 0.04)
-
-        if self.task_id == "task_3_hard" and is_attack:
-            if action == "rate_limit":
-                reward = min(0.99, reward + 0.04)
-            elif action == "block" and severity < 0.5:
-                reward = max(0.01, reward - 0.08)
-
-        if self.system_health > 70:
-            reward = min(0.99, reward + 0.02)
+        reward = self._apply_task_specific_modifiers(
+            action, reward, is_attack, severity
+        )
+        reward = self._apply_health_bonus(reward)
 
         return round(max(0.01, min(0.99, reward)), 4)
+
+    def _apply_early_detection_bonus(
+        self, action: str, reward: float
+    ) -> float:
+        if self.attack_detected_step is None and action in (
+            "rate_limit",
+            "block",
+        ):
+            self.attack_detected_step = self.step_count
+            if self.step_count <= 3:
+                return min(0.99, reward + 0.04)
+        return reward
+
+    def _apply_task_specific_modifiers(
+        self, action: str, reward: float, is_attack: bool, severity: float
+    ) -> float:
+        if self.task_id == "task_3_hard" and is_attack:
+            if action == "rate_limit":
+                return min(0.99, reward + 0.04)
+            if action == "block" and severity < 0.5:
+                return max(0.01, reward - 0.08)
+        return reward
+
+    def _apply_health_bonus(self, reward: float) -> float:
+        if self.system_health > 70:
+            return min(0.99, reward + 0.02)
+        return reward
+
+    def _compute_normal_reward(self, action: str) -> float:
+        if action == "monitor":
+            return 0.90 + random.uniform(0, 0.08)
+        elif action == "rate_limit":
+            self.false_positives += 1
+            return 0.25 + random.uniform(0, 0.08)
+        elif action == "block":
+            self.false_positives += 1
+            return 0.08 + random.uniform(0, 0.06)
+        return 0.50
+
+    def _compute_attack_reward(self, action: str, severity: float) -> float:
+        if severity > 0.6:
+            return self._compute_severe_attack_reward(action)
+        elif severity > 0.2:
+            return self._compute_moderate_attack_reward(action)
+        return self._compute_mild_attack_reward(action)
+
+    def _compute_severe_attack_reward(self, action: str) -> float:
+        if action == "block":
+            return 0.88 + random.uniform(0, 0.09)
+        elif action == "rate_limit":
+            return 0.48 + random.uniform(0, 0.10)
+        return 0.03 + random.uniform(0, 0.05)
+
+    def _compute_moderate_attack_reward(self, action: str) -> float:
+        if action == "rate_limit":
+            return 0.85 + random.uniform(0, 0.09)
+        elif action == "block":
+            return 0.58 + random.uniform(0, 0.10)
+        return 0.05 + random.uniform(0, 0.07)
+
+    def _compute_mild_attack_reward(self, action: str) -> float:
+        if action in ("rate_limit", "block"):
+            return 0.78 + random.uniform(0, 0.10)
+        return 0.10 + random.uniform(0, 0.08)
 
     def _observation(self) -> Observation:
         return Observation(
