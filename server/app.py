@@ -1,9 +1,11 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 import random
 import math
+import os
 
 from .models import Observation, Action, StepResponse
 
@@ -11,6 +13,16 @@ app = FastAPI(
     title="CLAIRS Autonomous Defense Environment",
     description="OpenEnv-compliant RL environment for IoT DDoS mitigation",
     version="2.0.0",
+)
+
+allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
