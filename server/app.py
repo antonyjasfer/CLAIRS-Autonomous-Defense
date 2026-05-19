@@ -4,7 +4,7 @@ from typing import Optional
 import uvicorn
 import random
 
-from .models import Observation, Action, StepResponse
+from .models import Observation, StepResponse
 
 app = FastAPI(
     title="CLAIRS Autonomous Defense Environment",
