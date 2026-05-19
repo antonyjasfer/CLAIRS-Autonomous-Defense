@@ -60,3 +60,67 @@ def test_classify_trend_history_length_greater_than_2():
     # pps diff: 500 - 100 = 400 (RISING)
     history = [{"pps": 100}, {"pps": 9000}, {"pps": 500}]
     assert _classify_trend(history, "pps") == "RISING"
+
+from inference import get_action
+
+def test_get_action_fallback_on_exception(mocker):
+    # Mock the OpenAI client call to raise an exception
+    mocker.patch("inference.client.chat.completions.create", side_effect=Exception("API Error"))
+
+    # Call the function with a sample history
+    history = [
+        {"cpu": 10.0, "pps": 100.0, "bw": 1.0, "health": 100.0},
+        {"cpu": 10.0, "pps": 100.0, "bw": 1.0, "health": 100.0}
+    ]
+
+    # Verify it falls back to "monitor"
+    result = get_action(history)
+    assert result == "monitor"
+
+def test_get_action_block(mocker):
+    mock_create = mocker.patch("inference.client.chat.completions.create")
+    mock_create.return_value.choices = [
+        mocker.Mock(message=mocker.Mock(content="Block\n"))
+    ]
+
+    history = [
+        {"cpu": 10.0, "pps": 100.0, "bw": 1.0, "health": 100.0},
+    ]
+    result = get_action(history)
+    assert result == "block"
+
+def test_get_action_rate_limit(mocker):
+    mock_create = mocker.patch("inference.client.chat.completions.create")
+    mock_create.return_value.choices = [
+        mocker.Mock(message=mocker.Mock(content="RATE_LIMIT"))
+    ]
+
+    history = [
+        {"cpu": 10.0, "pps": 100.0, "bw": 1.0, "health": 100.0},
+    ]
+    result = get_action(history)
+    assert result == "rate_limit"
+
+def test_get_action_monitor(mocker):
+    mock_create = mocker.patch("inference.client.chat.completions.create")
+    mock_create.return_value.choices = [
+        mocker.Mock(message=mocker.Mock(content="monitor."))
+    ]
+
+    history = [
+        {"cpu": 10.0, "pps": 100.0, "bw": 1.0, "health": 100.0},
+    ]
+    result = get_action(history)
+    assert result == "monitor"
+
+def test_get_action_rate_limit_alternative_word(mocker):
+    mock_create = mocker.patch("inference.client.chat.completions.create")
+    mock_create.return_value.choices = [
+        mocker.Mock(message=mocker.Mock(content="limit"))
+    ]
+
+    history = [
+        {"cpu": 10.0, "pps": 100.0, "bw": 1.0, "health": 100.0},
+    ]
+    result = get_action(history)
+    assert result == "rate_limit"
