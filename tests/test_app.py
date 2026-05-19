@@ -1,6 +1,9 @@
 import pytest
-from server.app import NetworkSimulator, ATTACK_PROFILES
+from fastapi.testclient import TestClient
+from server.app import app, NetworkSimulator, ATTACK_PROFILES
 from server.models import Observation
+
+client = TestClient(app)
 
 def test_network_simulator_reset():
     sim = NetworkSimulator()
@@ -45,3 +48,24 @@ def test_network_simulator_reset_invalid_task_id():
     sim = NetworkSimulator()
     with pytest.raises(KeyError):
         sim.reset("invalid_task_id")
+
+def test_reset_endpoint_default():
+    response = client.post("/reset")
+    assert response.status_code == 200
+    data = response.json()
+    obs = Observation(**data)
+    assert obs.system_health == 100.0
+
+def test_reset_endpoint_valid_task():
+    response = client.post("/reset", json={"task_id": "task_2_medium"})
+    assert response.status_code == 200
+    data = response.json()
+    obs = Observation(**data)
+    assert obs.system_health == 100.0
+
+def test_reset_endpoint_invalid_task():
+    response = client.post("/reset", json={"task_id": "invalid_task"})
+    assert response.status_code == 200
+    data = response.json()
+    obs = Observation(**data)
+    assert obs.system_health == 100.0
