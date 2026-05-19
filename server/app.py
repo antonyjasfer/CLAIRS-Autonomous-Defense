@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 import random
+import os
 
 from .models import Observation, StepResponse
 
@@ -338,8 +340,17 @@ class NetworkSimulator:
 
 simulator = NetworkSimulator()
 
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-@app.post("/reset")
+def verify_api_key(api_key_header: str = Security(api_key_header)):
+    expected_api_key = os.environ.get("API_KEY", "default_secret_key")
+    if api_key_header != expected_api_key:
+        raise HTTPException(status_code=403, detail="Could not validate credentials")
+    return api_key_header
+
+
+@app.post("/reset", dependencies=[Depends(verify_api_key)])
 def reset(req: Optional[ResetRequest] = None):
     task_id = req.task_id if req else "task_1_easy"
     if task_id not in ATTACK_PROFILES:
@@ -349,7 +360,7 @@ def reset(req: Optional[ResetRequest] = None):
     return obs.model_dump()
 
 
-@app.post("/step", response_model=StepResponse)
+@app.post("/step", response_model=StepResponse, dependencies=[Depends(verify_api_key)])
 def step(payload: Optional[ActionPayload] = None):
     action = payload.decision.lower() if payload else "monitor"
     obs, reward, done, info = simulator.step(action)
@@ -357,7 +368,7 @@ def step(payload: Optional[ActionPayload] = None):
     return StepResponse(observation=obs, reward=reward, done=done, info=info)
 
 
-@app.get("/state", response_model=Observation)
+@app.get("/state", response_model=Observation, dependencies=[Depends(verify_api_key)])
 def state():
     return simulator.get_state()
 
