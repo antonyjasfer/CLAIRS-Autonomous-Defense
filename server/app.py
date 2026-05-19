@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from typing import Optional
 import uvicorn
 import random
-import math
 
 from .models import Observation, Action, StepResponse
 
