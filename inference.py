@@ -101,22 +101,44 @@ def get_action(history):
         return "monitor"
 
 
+def reset_environment(task_id, session):
+    try:
+        res = session.post(f"{ENV_URL}/reset", json={"task_id": task_id}).json()
+        obs = res if "cpu_usage_percent" in res else res.get("observation", {})
+    except Exception:
+        obs = {
+            "cpu_usage_percent": 0.0,
+            "packet_rate_pps": 0.0,
+            "active_connections": 0,
+            "bandwidth_mbps": 0.0,
+            "memory_usage_percent": 30.0,
+            "system_health": 100.0,
+        }
+    return obs
+
+
+def step_environment(action, current_obs, session):
+    try:
+        step_res = session.post(
+            f"{ENV_URL}/step", json={"decision": action}
+        ).json()
+        obs = step_res.get("observation", current_obs)
+        reward = step_res.get("reward", 0.01)
+        done = step_res.get("done", True)
+        error = None
+    except Exception as e:
+        obs = current_obs
+        reward = 0.01
+        done = True
+        error = str(e)
+    return obs, reward, done, error
+
+
 def run_episode(task_id):
     log_start(task=task_id, env="clairs-network-defense", model=MODEL_NAME)
 
     with requests.Session() as session:
-        try:
-            res = session.post(f"{ENV_URL}/reset", json={"task_id": task_id}).json()
-            obs = res if "cpu_usage_percent" in res else res.get("observation", {})
-        except Exception:
-            obs = {
-                "cpu_usage_percent": 0.0,
-                "packet_rate_pps": 0.0,
-                "active_connections": 0,
-                "bandwidth_mbps": 0.0,
-                "memory_usage_percent": 30.0,
-                "system_health": 100.0,
-            }
+        obs = reset_environment(task_id, session)
 
         done = False
         step_count = 0
@@ -137,21 +159,16 @@ def run_episode(task_id):
 
             action = get_action(history)
 
-            try:
-                step_res = session.post(
-                    f"{ENV_URL}/step", json={"decision": action}
-                ).json()
-                obs = step_res.get("observation", obs)
-                reward = step_res.get("reward", 0.01)
-                done = step_res.get("done", True)
-                error = None
-            except Exception as e:
-                reward = 0.01
-                done = True
-                error = str(e)
+            obs, reward, done, error = step_environment(action, obs, session)
 
             rewards.append(reward)
-            log_step(step=step_count, action=action, reward=reward, done=done, error=error)
+            log_step(
+                step=step_count,
+                action=action,
+                reward=reward,
+                done=done,
+                error=error,
+            )
 
         raw_score = sum(rewards) / len(rewards) if rewards else 0.01
         score = max(0.01, min(0.99, raw_score))
