@@ -132,6 +132,7 @@ class NetworkSimulator:
         self.attack_detected_step = None
         self.cumulative_damage = 0.0
         self._cached_phase = None
+        self._cached_step = None
 
     def reset(self, task_id: str) -> Observation:
         self.task_id = task_id
@@ -141,6 +142,7 @@ class NetworkSimulator:
         self.attack_detected_step = None
         self.cumulative_damage = 0.0
         self._cached_phase = None
+        self._cached_step = None
 
         first_phase = ATTACK_PROFILES[task_id]["phases"][0]
 
@@ -179,12 +181,19 @@ class NetworkSimulator:
         return self._observation()
 
     def _current_phase(self) -> dict:
+        if self._cached_step == self.step_count:
+            return self._cached_phase
+
+        self._cached_step = self.step_count
+
         if self._cached_phase and self._cached_phase["start"] <= self.step_count < self._cached_phase["end"]:
             return self._cached_phase
+
         for phase in ATTACK_PROFILES[self.task_id]["phases"]:
             if phase["start"] <= self.step_count < phase["end"]:
                 self._cached_phase = phase
                 return phase
+
         self._cached_phase = ATTACK_PROFILES[self.task_id]["phases"][-1]
         return self._cached_phase
 
