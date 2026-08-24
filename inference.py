@@ -9,6 +9,7 @@ if not HF_TOKEN:
     raise ValueError("HF_TOKEN environment variable is not set")
 
 ENV_URL = "http://127.0.0.1:7860"
+API_KEY = os.getenv("API_KEY", "default_secret_key")
 
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
@@ -103,7 +104,7 @@ def get_action(history):
 
 def reset_environment(task_id):
     try:
-        res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}).json()
+        res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}, headers={"X-API-Key": API_KEY}).json()
         obs = res if "cpu_usage_percent" in res else res.get("observation", {})
     except Exception:
         obs = {
@@ -120,7 +121,7 @@ def reset_environment(task_id):
 def step_environment(action, current_obs):
     try:
         step_res = requests.post(
-            f"{ENV_URL}/step", json={"decision": action}
+            f"{ENV_URL}/step", json={"decision": action}, headers={"X-API-Key": API_KEY}
         ).json()
         obs = step_res.get("observation", current_obs)
         reward = step_res.get("reward", 0.01)

@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
+import os
 import secrets
-import math
 
 from .models import Observation, StepResponse
 
@@ -135,6 +136,7 @@ class NetworkSimulator:
         self.attack_detected_step = None
         self.cumulative_damage = 0.0
         self._cached_phase = None
+        self._cached_step = None
 
     def reset(self, task_id: str) -> Observation:
         self.task_id = task_id
@@ -144,6 +146,7 @@ class NetworkSimulator:
         self.attack_detected_step = None
         self.cumulative_damage = 0.0
         self._cached_phase = None
+        self._cached_step = None
 
         first_phase = ATTACK_PROFILES[task_id]["phases"][0]
 
@@ -182,12 +185,19 @@ class NetworkSimulator:
         return self._observation()
 
     def _current_phase(self) -> dict:
+        if self._cached_step == self.step_count:
+            return self._cached_phase
+
+        self._cached_step = self.step_count
+
         if self._cached_phase and self._cached_phase["start"] <= self.step_count < self._cached_phase["end"]:
             return self._cached_phase
+
         for phase in ATTACK_PROFILES[self.task_id]["phases"]:
             if phase["start"] <= self.step_count < phase["end"]:
                 self._cached_phase = phase
                 return phase
+
         self._cached_phase = ATTACK_PROFILES[self.task_id]["phases"][-1]
         return self._cached_phase
 
@@ -293,13 +303,13 @@ class NetworkSimulator:
 
     def _compute_normal_reward(self, action: str) -> float:
         if action == "monitor":
-            return 0.90 + random.uniform(0, 0.08)
+            return 0.90 + secure_random.uniform(0, 0.08)
         elif action == "rate_limit":
             self.false_positives += 1
-            return 0.25 + random.uniform(0, 0.08)
+            return 0.25 + secure_random.uniform(0, 0.08)
         elif action == "block":
             self.false_positives += 1
-            return 0.08 + random.uniform(0, 0.06)
+            return 0.08 + secure_random.uniform(0, 0.06)
         return 0.50
 
     def _compute_attack_reward(self, action: str, severity: float) -> float:
@@ -311,22 +321,22 @@ class NetworkSimulator:
 
     def _compute_severe_attack_reward(self, action: str) -> float:
         if action == "block":
-            return 0.88 + random.uniform(0, 0.09)
+            return 0.88 + secure_random.uniform(0, 0.09)
         elif action == "rate_limit":
-            return 0.48 + random.uniform(0, 0.10)
-        return 0.03 + random.uniform(0, 0.05)
+            return 0.48 + secure_random.uniform(0, 0.10)
+        return 0.03 + secure_random.uniform(0, 0.05)
 
     def _compute_moderate_attack_reward(self, action: str) -> float:
         if action == "rate_limit":
-            return 0.85 + random.uniform(0, 0.09)
+            return 0.85 + secure_random.uniform(0, 0.09)
         elif action == "block":
-            return 0.58 + random.uniform(0, 0.10)
-        return 0.05 + random.uniform(0, 0.07)
+            return 0.58 + secure_random.uniform(0, 0.10)
+        return 0.05 + secure_random.uniform(0, 0.07)
 
     def _compute_mild_attack_reward(self, action: str) -> float:
         if action in ("rate_limit", "block"):
-            return 0.78 + random.uniform(0, 0.10)
-        return 0.10 + random.uniform(0, 0.08)
+            return 0.78 + secure_random.uniform(0, 0.10)
+        return 0.10 + secure_random.uniform(0, 0.08)
 
     def _observation(self) -> Observation:
         return Observation(
@@ -341,8 +351,17 @@ class NetworkSimulator:
 
 simulator = NetworkSimulator()
 
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-@app.post("/reset")
+def verify_api_key(api_key_header: str = Security(api_key_header)):
+    expected_api_key = os.environ.get("API_KEY", "default_secret_key")
+    if api_key_header != expected_api_key:
+        raise HTTPException(status_code=403, detail="Could not validate credentials")
+    return api_key_header
+
+
+@app.post("/reset", dependencies=[Depends(verify_api_key)])
 def reset(req: Optional[ResetRequest] = None):
     task_id = req.task_id if req else "task_1_easy"
     if task_id not in ATTACK_PROFILES:
@@ -352,7 +371,7 @@ def reset(req: Optional[ResetRequest] = None):
     return obs.model_dump()
 
 
-@app.post("/step", response_model=StepResponse)
+@app.post("/step", response_model=StepResponse, dependencies=[Depends(verify_api_key)])
 def step(payload: Optional[ActionPayload] = None):
     action = payload.decision.lower() if payload else "monitor"
     obs, reward, done, info = simulator.step(action)
@@ -360,7 +379,7 @@ def step(payload: Optional[ActionPayload] = None):
     return StepResponse(observation=obs, reward=reward, done=done, info=info)
 
 
-@app.get("/state", response_model=Observation)
+@app.get("/state", response_model=Observation, dependencies=[Depends(verify_api_key)])
 def state():
     return simulator.get_state()
 
