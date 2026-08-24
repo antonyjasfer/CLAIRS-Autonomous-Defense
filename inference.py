@@ -8,7 +8,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 ENV_URL = "http://127.0.0.1:7860"
 
-client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN) if HF_TOKEN else None
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN or " ")
 
 
 def log_start(task, env, model):
@@ -54,7 +54,7 @@ def _classify_trend(history, key):
 
 
 def get_action(history):
-    if client is None:
+    if not HF_TOKEN:
         return "monitor"
 
     entries = []
