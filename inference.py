@@ -9,6 +9,7 @@ if not HF_TOKEN:
     raise ValueError("HF_TOKEN environment variable is not set")
 
 ENV_URL = "http://127.0.0.1:7860"
+API_KEY = os.getenv("API_KEY", "default_secret_key")
 
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
@@ -101,9 +102,15 @@ def get_action(history):
         return "monitor"
 
 
+<<<<<<< HEAD
 def reset_environment(task_id, session):
     try:
         res = session.post(f"{ENV_URL}/reset", json={"task_id": task_id}).json()
+=======
+def reset_environment(task_id):
+    try:
+        res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}, headers={"X-API-Key": API_KEY}).json()
+>>>>>>> origin/main
         obs = res if "cpu_usage_percent" in res else res.get("observation", {})
     except Exception:
         obs = {
@@ -115,6 +122,32 @@ def reset_environment(task_id, session):
             "system_health": 100.0,
         }
     return obs
+<<<<<<< HEAD
+=======
+
+
+def step_environment(action, current_obs):
+    try:
+        step_res = requests.post(
+            f"{ENV_URL}/step", json={"decision": action}, headers={"X-API-Key": API_KEY}
+        ).json()
+        obs = step_res.get("observation", current_obs)
+        reward = step_res.get("reward", 0.01)
+        done = step_res.get("done", True)
+        error = None
+    except Exception as e:
+        obs = current_obs
+        reward = 0.01
+        done = True
+        error = str(e)
+    return obs, reward, done, error
+
+
+def run_episode(task_id):
+    log_start(task=task_id, env="clairs-network-defense", model=MODEL_NAME)
+
+    obs = reset_environment(task_id)
+>>>>>>> origin/main
 
 
 def step_environment(action, current_obs, session):
@@ -140,10 +173,14 @@ def run_episode(task_id):
     with requests.Session() as session:
         obs = reset_environment(task_id, session)
 
+<<<<<<< HEAD
         done = False
         step_count = 0
         rewards = []
         history = []
+=======
+        obs, reward, done, error = step_environment(action, obs)
+>>>>>>> origin/main
 
         while not done and step_count < 10:
             step_count += 1
