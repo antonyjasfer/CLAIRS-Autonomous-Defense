@@ -1,6 +1,9 @@
 import pytest
 from server.app import NetworkSimulator, ATTACK_PROFILES
 from server.models import Observation
+from fastapi.testclient import TestClient
+from server.app import app
+import os
 
 def test_network_simulator_reset():
     sim = NetworkSimulator()
@@ -45,10 +48,6 @@ def test_network_simulator_reset_invalid_task_id():
     sim = NetworkSimulator()
     with pytest.raises(KeyError):
         sim.reset("invalid_task_id")
-
-from fastapi.testclient import TestClient
-from server.app import app
-import os
 
 client = TestClient(app)
 
