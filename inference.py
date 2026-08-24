@@ -5,12 +5,10 @@ from openai import OpenAI
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api-inference.huggingface.co/v1/")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN")
-if not HF_TOKEN:
-    raise ValueError("HF_TOKEN environment variable is not set")
 
 ENV_URL = "http://127.0.0.1:7860"
 
-client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN) if HF_TOKEN else None
 
 
 def log_start(task, env, model):
@@ -56,6 +54,9 @@ def _classify_trend(history, key):
 
 
 def get_action(history):
+    if client is None:
+        return "monitor"
+
     entries = []
     for h in history:
         entries.append(
