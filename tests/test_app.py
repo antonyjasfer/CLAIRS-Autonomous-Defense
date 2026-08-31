@@ -1,9 +1,12 @@
 import pytest
 from server.app import NetworkSimulator, ATTACK_PROFILES
 from server.models import Observation
+<<<<<<< HEAD
+=======
 from fastapi.testclient import TestClient
 from server.app import app
 import os
+>>>>>>> origin/main
 
 def test_network_simulator_reset():
     sim = NetworkSimulator()
@@ -48,6 +51,8 @@ def test_network_simulator_reset_invalid_task_id():
     sim = NetworkSimulator()
     with pytest.raises(KeyError):
         sim.reset("invalid_task_id")
+<<<<<<< HEAD
+=======
 
 client = TestClient(app)
 
@@ -88,3 +93,4 @@ def test_health_endpoint_public():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+>>>>>>> origin/main

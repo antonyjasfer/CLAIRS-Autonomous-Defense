@@ -3,12 +3,18 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
+<<<<<<< HEAD
+import random
+
+from .models import Observation, StepResponse
+=======
 import os
 import secrets
 
 from .models import Observation, StepResponse
 
 secure_random = secrets.SystemRandom()
+>>>>>>> origin/main
 
 app = FastAPI(
     title="CLAIRS Autonomous Defense Environment",
@@ -136,7 +142,10 @@ class NetworkSimulator:
         self.attack_detected_step = None
         self.cumulative_damage = 0.0
         self._cached_phase = None
+<<<<<<< HEAD
+=======
         self._cached_step = None
+>>>>>>> origin/main
 
     def reset(self, task_id: str) -> Observation:
         self.task_id = task_id
@@ -146,7 +155,10 @@ class NetworkSimulator:
         self.attack_detected_step = None
         self.cumulative_damage = 0.0
         self._cached_phase = None
+<<<<<<< HEAD
+=======
         self._cached_step = None
+>>>>>>> origin/main
 
         first_phase = ATTACK_PROFILES[task_id]["phases"][0]
 
@@ -185,6 +197,10 @@ class NetworkSimulator:
         return self._observation()
 
     def _current_phase(self) -> dict:
+<<<<<<< HEAD
+        if self._cached_phase and self._cached_phase["start"] <= self.step_count < self._cached_phase["end"]:
+            return self._cached_phase
+=======
         if self._cached_step == self.step_count:
             return self._cached_phase
 
@@ -193,11 +209,15 @@ class NetworkSimulator:
         if self._cached_phase and self._cached_phase["start"] <= self.step_count < self._cached_phase["end"]:
             return self._cached_phase
 
+>>>>>>> origin/main
         for phase in ATTACK_PROFILES[self.task_id]["phases"]:
             if phase["start"] <= self.step_count < phase["end"]:
                 self._cached_phase = phase
                 return phase
+<<<<<<< HEAD
+=======
 
+>>>>>>> origin/main
         self._cached_phase = ATTACK_PROFILES[self.task_id]["phases"][-1]
         return self._cached_phase
 
@@ -303,6 +323,15 @@ class NetworkSimulator:
 
     def _compute_normal_reward(self, action: str) -> float:
         if action == "monitor":
+<<<<<<< HEAD
+            return 0.90 + random.uniform(0, 0.08)
+        elif action == "rate_limit":
+            self.false_positives += 1
+            return 0.25 + random.uniform(0, 0.08)
+        elif action == "block":
+            self.false_positives += 1
+            return 0.08 + random.uniform(0, 0.06)
+=======
             return 0.90 + secure_random.uniform(0, 0.08)
         elif action == "rate_limit":
             self.false_positives += 1
@@ -310,6 +339,7 @@ class NetworkSimulator:
         elif action == "block":
             self.false_positives += 1
             return 0.08 + secure_random.uniform(0, 0.06)
+>>>>>>> origin/main
         return 0.50
 
     def _compute_attack_reward(self, action: str, severity: float) -> float:
@@ -321,6 +351,24 @@ class NetworkSimulator:
 
     def _compute_severe_attack_reward(self, action: str) -> float:
         if action == "block":
+<<<<<<< HEAD
+            return 0.88 + random.uniform(0, 0.09)
+        elif action == "rate_limit":
+            return 0.48 + random.uniform(0, 0.10)
+        return 0.03 + random.uniform(0, 0.05)
+
+    def _compute_moderate_attack_reward(self, action: str) -> float:
+        if action == "rate_limit":
+            return 0.85 + random.uniform(0, 0.09)
+        elif action == "block":
+            return 0.58 + random.uniform(0, 0.10)
+        return 0.05 + random.uniform(0, 0.07)
+
+    def _compute_mild_attack_reward(self, action: str) -> float:
+        if action in ("rate_limit", "block"):
+            return 0.78 + random.uniform(0, 0.10)
+        return 0.10 + random.uniform(0, 0.08)
+=======
             return 0.88 + secure_random.uniform(0, 0.09)
         elif action == "rate_limit":
             return 0.48 + secure_random.uniform(0, 0.10)
@@ -337,6 +385,7 @@ class NetworkSimulator:
         if action in ("rate_limit", "block"):
             return 0.78 + secure_random.uniform(0, 0.10)
         return 0.10 + secure_random.uniform(0, 0.08)
+>>>>>>> origin/main
 
     def _observation(self) -> Observation:
         return Observation(
