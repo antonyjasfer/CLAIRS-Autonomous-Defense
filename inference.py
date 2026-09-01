@@ -1,6 +1,11 @@
+import logging
 import os
 import requests
-from openai import OpenAI
+from openai import OpenAI, OpenAIError
+
+# Configure logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://api-inference.huggingface.co/v1/")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Meta-Llama-3-8B-Instruct")
@@ -98,7 +103,11 @@ def get_action(history):
         if "limit" in text or "rate" in text:
             return "rate_limit"
         return "monitor"
-    except Exception:
+    except OpenAIError as e:
+        logger.error(f"OpenAI API error during classification: {e}")
+        return "monitor"
+    except Exception as e:
+        logger.error(f"Unexpected error during classification: {e}")
         return "monitor"
 
 
@@ -112,7 +121,18 @@ def reset_environment(task_id):
         res = requests.post(f"{ENV_URL}/reset", json={"task_id": task_id}, headers={"X-API-Key": API_KEY}).json()
 >>>>>>> origin/main
         obs = res if "cpu_usage_percent" in res else res.get("observation", {})
-    except Exception:
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error during environment reset: {e}")
+        obs = {
+            "cpu_usage_percent": 0.0,
+            "packet_rate_pps": 0.0,
+            "active_connections": 0,
+            "bandwidth_mbps": 0.0,
+            "memory_usage_percent": 30.0,
+            "system_health": 100.0,
+        }
+    except Exception as e:
+        logger.error(f"Unexpected error during environment reset: {e}")
         obs = {
             "cpu_usage_percent": 0.0,
             "packet_rate_pps": 0.0,
@@ -135,7 +155,14 @@ def step_environment(action, current_obs):
         reward = step_res.get("reward", 0.01)
         done = step_res.get("done", True)
         error = None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error during step action: {e}")
+        obs = current_obs
+        reward = 0.01
+        done = True
+        error = str(e)
     except Exception as e:
+        logger.error(f"Unexpected error during step action: {e}")
         obs = current_obs
         reward = 0.01
         done = True
